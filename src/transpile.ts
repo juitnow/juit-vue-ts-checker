@@ -43,6 +43,9 @@ export interface Transpiled {
   sourceMapConsumer?: SourceMapConsumer,
 }
 
+/** A key used to augmnet a TypeScript `SourceFile` with a `Transpiled` */
+export const transpiled = Symbol()
+
 // Transpile a .vue file into a properly annotated .ts file
 export function transpile(fileName: string, source: string): Transpiled | null {
   // Ask @vue/compiler-sfc to parse the .vue file, splitting it nicely...

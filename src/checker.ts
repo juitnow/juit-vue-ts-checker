@@ -1,362 +1,91 @@
-/* eslint-disable no-inner-declarations */
-import path from 'path'
+import {
+  VueCompilerHost,
+} from './compiler'
 
-import { Transpiled, transpile } from './transpile'
+import { filesCache,
+  resolveFileName,
+} from './files'
 
-import { SourceMapConsumer } from 'source-map'
+import { diagnosticsReport,
+  Report,
+  Reports,
+  makeReports,
+  sourceFilesReport,
+} from './reports'
 
 import {
   CompilerHost,
   CompilerOptions,
   convertCompilerOptionsFromJson,
   createProgram,
-  flattenDiagnosticMessageText,
-  createSourceFile,
-  getDefaultLibFilePath,
+  getDefaultCompilerOptions,
   getPreEmitDiagnostics,
   readConfigFile,
-  ScriptTarget,
-  SourceFile,
-  sys as tsSys,
-  DiagnosticCategory,
-  getLineAndCharacterOfPosition,
+  sys,
 } from 'typescript'
 
-/* ========================================================================== *
- * EXPORTED TYPES                                                             *
- * ========================================================================== */
 
-/** Our main interface for reports */
-export interface Report {
-  /** The TypeScript error code (TSxxxx) */
-  code: number,
-  /** The message associated with this report */
-  message: string,
-  /** The severity of this report */
-  severity: 'error' | 'message' | 'suggestion' | 'warning' | 'unknown',
-  /** Set to _true_ if this report is an _error_ report */
-  isError?: true,
-  /** Set to _true_ if this report is a _warning_ report */
-  isWarning?: true,
-  /** The file name (if known) associated with this report */
-  fileName?: string,
-  /** The optional location of this report */
-  location?: {
-    line: number,
-    column: number,
-    context: string,
-    contextLength: number,
-  }
-}
+// An internal tuple for our internal state
+type CheckerState = [ CompilerOptions, CompilerHost, Reports ]
 
-/* ========================================================================== *
- * TYPESCRIPT COMPILER HOST                                                   *
- * ========================================================================== */
+export class Checker {
+  private _state: () => CheckerState
 
-function reportLocationForPosition(
-    file: SourceFile,
-    start: number,
-    length?: number,
-): Report['location'] | undefined {
-  const position = getLineAndCharacterOfPosition(file, start)
+  constructor(tsConfigFileName?: string) {
+    if (tsConfigFileName) {
+      // If we have a config file name, the "state" will be resolved during
+      // "check", and our cache will make sure that everything is reinitialized
+      // correctly when the config filename changes on disk...
+      const cache = filesCache<CheckerState>()
+      this._state = (): CheckerState => {
+        const state = cache(tsConfigFileName, (resolvedConfigFileName) => {
+          const json = readConfigFile(resolvedConfigFileName, sys.readFile)
+          const jsonOptions = json.config.compilerOptions
+          const { options, errors } = convertCompilerOptionsFromJson(jsonOptions, sys.getCurrentDirectory())
+          const reports = diagnosticsReport(errors)
+          return [ options, new VueCompilerHost(), reports ]
+        })
 
-  const lineStart = file.getLineStarts()[position.line]
-  const lineEnd = file.getLineEndOfPosition(start)
+        if (state) return state
 
-  const contextLine = file.getFullText().substring(lineStart, lineEnd)
-  let contextLength = length || 0
-
-  // If the end goes beyond one line, cut it to the end of it
-  if ((position.character + contextLength) > contextLine.length) {
-    contextLength = contextLine.length - position.character
-  }
-
-  // All done!
-  return {
-    line: position.line + 1,
-    column: position.character,
-    context: contextLine,
-    contextLength: contextLength,
-  }
-}
-
-function reportLocationForTranspiledPosition(
-    file: SourceFile,
-    transpiled: Transpiled,
-    start: number,
-    length?: number,
-): Report['location'] | undefined {
-  const position = getLineAndCharacterOfPosition(file, start)
-
-  // Make sure we have a source map consumer (lazy init)
-  if (! transpiled.sourceMapConsumer) {
-    transpiled.sourceMapConsumer = new SourceMapConsumer(transpiled.sourceMap)
-  }
-
-  // Get the original position in the template
-  const originalPosition = transpiled.sourceMapConsumer.originalPositionFor({
-    line: position.line + 1,
-    column: position.character,
-  })
-
-  // If we don't know the original position, or the original line... pointless
-  if (!(originalPosition && originalPosition.line)) return
-
-  // Make sure we have some lines (lazy init)
-  if (! transpiled.templateLines) {
-    transpiled.templateLines = transpiled.template.split('\n')
-  }
-
-  // Get our context line
-  const { line, column = 0 } = originalPosition
-  const contextLine = transpiled.templateLines[line - 1]
-
-  // Use a regenerated position's last column to calculate the length (if any)
-  let contextLength = length || 0
-
-  // If the end goes beyond one line, cut it to the end of it
-  if ((column + contextLength) > contextLine.length) {
-    contextLength = contextLine.length - column
-  }
-
-  // All done!
-  return {
-    line: line,
-    column: column,
-    context: contextLine,
-    contextLength: contextLength,
-  }
-}
-
-const VUE_JS_TEMPLATE_SHIM = [
-  'import type { DefineComponent } from "vue";',
-  'declare const component: DefineComponent<{}, {}>;',
-  'export default component;',
-].join('\n')
-
-const VUE_JS_TEMPLATE = Symbol()
-
-export class VueCompilerHost implements CompilerHost {
-  private _getSourceFileCache: Record<string, SourceFile | undefined> = {}
-  private _transpiledCache: Record<string, Transpiled> = {}
-
-  readonly compilerOptions: CompilerOptions
-
-  constructor(tsConfigFileName: string) {
-    const json = readConfigFile(tsConfigFileName, this.readFile.bind(this))
-    const converted = convertCompilerOptionsFromJson(json.config.compilerOptions, tsSys.getCurrentDirectory())
-    this.compilerOptions = converted.options
-  }
-
-  /* ======================================================================== */
-
-  private _createSourceFile(
-      fileName: string,
-      languageVersion: ScriptTarget,
-      onError?: (message: string) => void,
-  ): SourceFile | undefined {
-    const sourceContents = this.readFile(fileName)
-    if (sourceContents === undefined) return
-
-    fileName = this.getCanonicalFileName(fileName)
-
-    if (fileName.endsWith('.vue') || fileName.endsWith('.vue/index.ts')) {
-      try {
-        const transpiled = transpile(fileName, sourceContents)
-        if (transpiled != null) {
-          this._transpiledCache[fileName] = transpiled
-          return createSourceFile(fileName, transpiled.content, languageVersion)
-        } else {
-          const file = createSourceFile(fileName, VUE_JS_TEMPLATE_SHIM, languageVersion)
-          Object.defineProperty(file, VUE_JS_TEMPLATE, { value: true })
-          return file
-        }
-      } catch (error) {
-        if (onError) onError(error.message || error)
-        else throw error
+        const options = getDefaultCompilerOptions()
+        const host = new VueCompilerHost()
+        return [ options, host, makeReports({
+          code: 0,
+          message: 'File not found',
+          severity: 'error',
+          fileName: tsConfigFileName,
+        }) ]
       }
     } else {
-      return createSourceFile(fileName, sourceContents, languageVersion)
+      // If we don't have a config file, we just use some defaults
+      // and we never end up recreating the compiler host...
+      const options = getDefaultCompilerOptions()
+      const host = new VueCompilerHost()
+      const reports = makeReports()
+      this._state = (): CheckerState => [ options, host, reports ]
     }
   }
-
-  private _resolveFileName(fileName: string): string {
-    return path.resolve(this.getCurrentDirectory(), fileName)
-  }
-
-  private _relativeFileName(fileName: string): string {
-    const resolvedFileName = this._resolveFileName(fileName)
-
-    const pathPrefix = this.getCurrentDirectory() + path.sep
-    return resolvedFileName.startsWith(pathPrefix) ?
-      resolvedFileName.substr(pathPrefix.length) :
-      resolvedFileName
-  }
-
-  /* ======================================================================== */
-
-  getSourceFile(
-      fileName: string,
-      languageVersion: ScriptTarget,
-      onError?: (message: string) => void,
-      shouldCreateNewSourceFile?: boolean,
-  ): SourceFile | undefined {
-    if (shouldCreateNewSourceFile) {
-      return this._createSourceFile(fileName, languageVersion)
-    }
-
-    if (fileName in this._getSourceFileCache) {
-      return this._getSourceFileCache[fileName]
-    } else {
-      const sourceFile = this._createSourceFile(fileName, languageVersion, onError)
-      return this._getSourceFileCache[fileName] = sourceFile
-    }
-  }
-
-  writeFile(
-      fileName: string,
-      data: string,
-      writeByteOrderMark: boolean,
-      onError?: (message: string) => void,
-      sourceFiles?: readonly SourceFile[],
-  ): void {
-    // NO-OP: no writing, just checking!
-    void sourceFiles
-  }
-
-  // Our "canonical" name of a "file.vue" file name is "file.vue/index.ts"
-  // (so that we won't get into trouble when another file is accidentally
-  // called "file.vue.ts"). TypeScript will atomatically search this path
-  // when processing includes, soooo... We're happy!
-  getCanonicalFileName(fileName: string): string {
-    if (fileName.endsWith('.vue')) {
-      if (tsSys.fileExists(fileName)) fileName += '/index.ts'
-    }
-
-    const resolvedFileName = this._resolveFileName(fileName)
-    if (tsSys.useCaseSensitiveFileNames) return resolvedFileName
-    return resolvedFileName.toLowerCase()
-  }
-
-  // Check if a file exists... According to the rules above we migth
-  // have to strip the "/index.ts" from
-  fileExists(fileName: string): boolean {
-    const resolvedFileName = this._resolveFileName(fileName)
-
-    // If the file exists on disk, then no further questions
-    if (tsSys.fileExists(resolvedFileName)) return true
-
-    // If the file is our magical "file.vue/index.ts" then check it
-    if (resolvedFileName.endsWith('.vue/index.ts')) {
-      return tsSys.fileExists(resolvedFileName.substr(0, resolvedFileName.length - 9))
-    } else {
-      return false
-    }
-  }
-
-  readFile(fileName: string): string | undefined {
-    const resolvedFileName = this._resolveFileName(fileName)
-
-    // If the file exists on disk, then no further questions
-    const contents = tsSys.readFile(resolvedFileName)
-    if (contents !== undefined) return contents
-
-    // If the file is our magical "file.vue/index.ts" then check it
-    if (resolvedFileName.endsWith('.vue/index.ts')) {
-      return tsSys.readFile(resolvedFileName.substr(0, resolvedFileName.length - 9))
-    }
-  }
-
-  getDefaultLibFileName(options: CompilerOptions): string {
-    return getDefaultLibFilePath(options) // we need the full path
-  }
-
-  getDefaultLibLocation(): string {
-    const executingFilePath = tsSys.getExecutingFilePath()
-    const tsLibraryPath = path.dirname(executingFilePath)
-    return this._resolveFileName(tsLibraryPath)
-  }
-
-  getCurrentDirectory(): string {
-    return tsSys.getCurrentDirectory()
-  }
-
-  useCaseSensitiveFileNames(): boolean {
-    return tsSys.useCaseSensitiveFileNames
-  }
-
-  getNewLine(): string {
-    return tsSys.newLine
-  }
-
-  /* ======================================================================== */
 
   check(files: string[]): Report[] {
+    // This will get our options, host and some initial reports related to the
+    // parsing of our "tsconfig.json" file... If the "tsconfig.json" changes
+    // the options will be re-parsed, host recreated and reports re-generated
+    const [ options, host, reports ] = this._state()
+
     const relativeFiles: string[] = files.map((fileName) => {
-      const resolvedFileName = this._resolveFileName(fileName)
-      return path.relative(this.getCurrentDirectory(), resolvedFileName)
+      const resolvedFileName = resolveFileName(fileName)
+      return resolvedFileName
     })
 
-    const program = createProgram(relativeFiles, this.compilerOptions, this)
-    const diagnostics = getPreEmitDiagnostics(program).slice(0) // clone
-    const reports: Report[] = []
+    const program = createProgram(relativeFiles, options, host)
+    sourceFilesReport(program.getSourceFiles(), reports)
+    diagnosticsReport(getPreEmitDiagnostics(program), reports)
 
-    program.getSourceFiles().forEach((sourceFile) => {
-      if (VUE_JS_TEMPLATE in sourceFile) {
-        reports.push({
-          code: 0,
-          message: 'File is not a TypeScript-based Vue single file component',
-          severity: 'warning',
-          fileName: this._relativeFileName(sourceFile.fileName),
-        })
-      }
-    })
-
-    if (diagnostics.length === 0) {
+    if (reports.length === 0) {
       const emitResults = program.emit()
-      diagnostics.push(...emitResults.diagnostics)
+      diagnosticsReport(emitResults.diagnostics, reports)
     }
-
-    // console.log(ts.formatDiagnosticsWithColorAndContext(diagnostics, this))
-
-    reports.push(...diagnostics.map((diag) => {
-      // The basics...
-      const code = diag.code
-      const message = flattenDiagnosticMessageText(diag.messageText, tsSys.newLine, 2)
-      const severity =
-        diag.category === DiagnosticCategory.Error ? 'error' :
-        diag.category === DiagnosticCategory.Message ? 'message' :
-        diag.category === DiagnosticCategory.Suggestion ? 'suggestion' :
-        diag.category === DiagnosticCategory.Warning ? 'warning' :
-        'unknown'
-      const isError = diag.category === DiagnosticCategory.Error ? true : undefined
-      const isWarning = diag.category === DiagnosticCategory.Warning ? true : undefined
-
-      // This is our basic report...
-      const report: Report = { code, message, severity, isError, isWarning }
-
-      // If we have a file we can include it...
-      if (diag.file) {
-        const file = diag.file
-        const fileName = this._resolveFileName(file.fileName)
-        report.fileName = this._relativeFileName(file.fileName)
-
-        console.log(fileName, Object.keys(this._transpiledCache))
-
-        // If we have a position we can include it as well
-        if (diag.start !== undefined) {
-          // If the file was transpiled by us, we have to look up the position
-          // in the original .vue template, using our source map
-          if (fileName in this._transpiledCache) {
-            const transpiled = this._transpiledCache[fileName]
-            report.location = reportLocationForTranspiledPosition(file, transpiled, diag.start, diag.length)
-          } else {
-            report.location = reportLocationForPosition(file, diag.start, diag.length)
-          }
-        }
-      }
-      return report
-    }))
 
     return reports
   }

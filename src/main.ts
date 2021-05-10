@@ -1,7 +1,7 @@
-import { VueCompilerHost } from './checker'
+import { Checker } from './checker'
 
-function check(fileName: string) {
-  const compilerHost = new VueCompilerHost('tsconfig.json')
+function check(fileName: string): void {
+  const compilerHost = new Checker('tsconfig.json')
 
   const now = Date.now()
   const reports = compilerHost.check([ fileName ])
@@ -14,7 +14,7 @@ function check(fileName: string) {
   console.log('TOTAL TIME', Date.now() - now)
   // console.log(reports)
 
-  for (const report of reports) {
+  for (const report of reports.sort()) {
     console.log()
     const code = `TS${report.code.toString().padStart(4, '0')}`
     const message = [ `${report.severity.toUpperCase()} ${code}: ${report.message}` ]
