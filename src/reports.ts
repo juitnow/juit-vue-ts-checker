@@ -75,7 +75,7 @@ export function makeReports(...reports: Report[]): Reports {
     const { fileName: af = '' } = a
     const { fileName: bf = '' } = b
     const { line: al = msi, column: ac = msi } = a.location || {}
-    const { line: bl = msi, column: bc = msi } = a.location || {}
+    const { line: bl = msi, column: bc = msi } = b.location || {}
 
     return af < bf ? -1 : // file
            af > bf ? +1 : //
@@ -91,7 +91,8 @@ export function makeReports(...reports: Report[]): Reports {
     return this
   }
 
-  return Object.defineProperties([], {
+  // Here "reports" is always a new array, as it comes from the ... operator
+  return Object.defineProperties(reports, {
     hasErrors: { enumerable: true, get: hasErrors.bind(reports) },
     hasWarnings: { enumerable: true, get: hasWarnings.bind(reports) },
     sort: { value: sort },

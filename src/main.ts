@@ -4,15 +4,16 @@ function check(fileName: string): void {
   const compilerHost = new Checker('tsconfig.json')
 
   const now = Date.now()
-  const reports = compilerHost.check([ fileName ])
-  console.log('TIME', Date.now() - now)
+  const reports = compilerHost.check(fileName)
+  console.log('TIME 1', Date.now() - now, 'reports', reports.length)
 
   const now2 = Date.now()
-  compilerHost.check([ fileName ])
-  console.log('TIME', Date.now() - now2)
+  compilerHost.check(fileName)
+  console.log('TIME2 ', Date.now() - now2, 'reports', reports.length)
 
   console.log('TOTAL TIME', Date.now() - now)
   // console.log(reports)
+
 
   for (const report of reports.sort()) {
     console.log()
@@ -33,6 +34,4 @@ function check(fileName: string): void {
   }
 }
 
-const now = Date.now()
 check('src/main.ts')
-console.log('TIME', Date.now() - now)

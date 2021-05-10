@@ -79,13 +79,12 @@ export class VueCompilerHost implements CompilerHost {
   /** @deprecated don't use it in _this_ code */
   writeFile(
       fileName: string,
-      data: string,
-      writeByteOrderMark: boolean,
-      onError?: (message: string) => void,
-      sourceFiles?: readonly SourceFile[],
+      // data: string,
+      // writeByteOrderMark: boolean,
+      // onError?: (message: string) => void,
+      // sourceFiles?: readonly SourceFile[],
   ): void {
-    // NO-OP: no writing, just checking!
-    void sourceFiles
+    throw new Error(`Cowardly refusing to output ${fileName}`)
   }
 
   /** @deprecated don't use it in _this_ code */

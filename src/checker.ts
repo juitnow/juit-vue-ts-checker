@@ -7,7 +7,6 @@ import { filesCache,
 } from './files'
 
 import { diagnosticsReport,
-  Report,
   Reports,
   makeReports,
   sourceFilesReport,
@@ -67,26 +66,29 @@ export class Checker {
     }
   }
 
-  check(files: string[]): Report[] {
+  check(...files: string[]): Reports {
     // This will get our options, host and some initial reports related to the
     // parsing of our "tsconfig.json" file... If the "tsconfig.json" changes
     // the options will be re-parsed, host recreated and reports re-generated
-    const [ options, host, reports ] = this._state()
+    const [ options, host, initialReports ] = this._state()
 
-    const relativeFiles: string[] = files.map((fileName) => {
-      const resolvedFileName = resolveFileName(fileName)
-      return resolvedFileName
-    })
+    // Clone our initial reports, and bail on errors
+    const reports = makeReports(...initialReports)
+    if (reports.hasErrors) return reports
 
+    // Resolve all our files before passing it off to the compiler
+    const relativeFiles: string[] = files.map(resolveFileName)
+
+    // Create a new "program" for TypeScript.. The host caches all internal
+    // `SourceFile`s for us, so we're pretty much ok running over and over...
     const program = createProgram(relativeFiles, options, host)
     sourceFilesReport(program.getSourceFiles(), reports)
     diagnosticsReport(getPreEmitDiagnostics(program), reports)
 
-    if (reports.length === 0) {
-      const emitResults = program.emit()
-      diagnosticsReport(emitResults.diagnostics, reports)
-    }
-
+    // We _should_ be safe not running the `emit(...)` part of the process.
+    // Theoretically that will just _render_ the various TypeScript ASTs into
+    // some JS code, while running some optional transformers. As we do not
+    // write files, but only check, the "createProgram" stage should suffice...
     return reports
   }
 }
