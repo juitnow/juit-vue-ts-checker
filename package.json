@@ -1,0 +1,35 @@
+{
+  "name": "@usrz/vue-ts-checker",
+  "version": "1.0.0",
+  "description": "Simple TypeScript checker for Vue single file components",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run compile && npm run lint",
+    "compile": "tsc",
+    "lint": "eslint --ext .js --ext .ts src",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "updates": "check-updates && rm -rf node_modules package-lock.json && npm install",
+    "watch": "nodemon -w src -e ts,js -x 'npm run build'"
+  },
+  "author": "Pier Fumagalli <pier@usrz.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/core": "^7.14.0",
+    "@babel/generator": "^7.14.1",
+    "@vue/compiler-sfc": "^3.0.11",
+    "source-map": "=0.6.1"
+  },
+  "devDependencies": {
+    "@types/babel__core": "^7.1.14",
+    "@types/babel__generator": "^7.6.2",
+    "@types/estree": "0.0.47",
+    "@types/node": "<15.0.0",
+    "@typescript-eslint/eslint-plugin": "^4.22.1",
+    "@typescript-eslint/parser": "^4.22.1",
+    "eslint": "^7.26.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-deprecation": "^1.2.1",
+    "typescript": "^4.2.4",
+    "vue": "^3.0.11"
+  }
+}

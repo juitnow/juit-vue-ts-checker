@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2020",
+    ],
+    "types": [
+      "node",
+    ],
+    "typeRoots": [
+      "node_modules/@types"
+    ],
+    "removeComments": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "sourceMap": false,
+    "inlineSourceMap": true,
+    "strict": true,
+    "target": "es2020",
+    "declaration": false,
+    "allowJs": false
+  },
+  "include": [ "src" ],
+  "exclude": []
+}
