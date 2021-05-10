@@ -56,14 +56,22 @@ module.exports = {
     'spaced-comment': [ 'error', 'always', { 'markers': [ '/ <reference' ] } ],
 
     // No redeclare / unused vars for TypeScript
-    '@typescript-eslint/no-redeclare': [ 'error' ], // TODO - re-enable this!!!
+    '@typescript-eslint/no-redeclare': [ 'error' ],
     '@typescript-eslint/no-unused-vars': [ 'error' ],
     '@typescript-eslint/no-dupe-class-members': [ 'error' ],
     '@typescript-eslint/no-invalid-this': [ 'error' ],
     '@typescript-eslint/no-floating-promises': [ 'error' ],
 
+    '@typescript-eslint/explicit-function-return-type': [ 'error', {
+      'allowDirectConstAssertionInArrowFunctions': true,
+      'allowConciseArrowFunctionExpressionsStartingWithVoid': true,
+    } ],
+
     // Works only with "@typescript-eslint/parser"!!!
     'deprecation/deprecation': [ 'warn' ],
+
+    // Remember our TODOs and FIXMEs
+    'no-warning-comments': [ 'warn' ],
 
     /* OFF RULES */
     '@typescript-eslint/camelcase': [ 'off' ], // do not require camelCase variables (TS)
