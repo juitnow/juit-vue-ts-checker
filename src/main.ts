@@ -1,14 +1,14 @@
 import { Checker } from './checker'
 
 function check(fileName: string): void {
-  const compilerHost = new Checker('tsconfig.json')
+  const checker = new Checker('tsconfig.json')
 
   const now = Date.now()
-  const reports = compilerHost.check(fileName)
+  const reports = checker.check(fileName)
   console.log('TIME 1', Date.now() - now, 'reports', reports.length)
 
   const now2 = Date.now()
-  compilerHost.check(fileName)
+  checker.check(fileName)
   console.log('TIME2 ', Date.now() - now2, 'reports', reports.length)
 
   console.log('TOTAL TIME', Date.now() - now)
@@ -35,16 +35,9 @@ function check(fileName: string): void {
 }
 
 check('src/main.ts')
-
-const rrr = 'foo'
-{
-  const rrr = 'bar'
-  void rrr
-}
-
-void rrr
-// TODO: this creates an error
+console.log('======================')
 // check('src/components/faq.vue')
+
 // check('src/components/faq.vue/index.ts')
 
 // /* eslint-disable */

@@ -77,11 +77,13 @@ export class Checker {
     if (reports.hasErrors) return reports
 
     // Resolve all our files before passing it off to the compiler
-    const relativeFiles: string[] = files.map(resolveFileName)
+    const resolvedFiles: string[] = files.map(resolveFileName)
+
+    console.log('CHECKING', resolvedFiles)
 
     // Create a new "program" for TypeScript.. The host caches all internal
     // `SourceFile`s for us, so we're pretty much ok running over and over...
-    const program = createProgram(relativeFiles, options, host)
+    const program = createProgram(resolvedFiles, options, host)
     sourceFilesReport(program.getSourceFiles(), reports)
     diagnosticsReport(getPreEmitDiagnostics(program), reports)
 
