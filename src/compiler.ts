@@ -63,7 +63,7 @@ import {
  * ========================================================================== */
 
 /* ========================================================================== *
- * INTERNAL CONSTANTS & TYPES                                                 *
+ * INTERNAL CONSTANTS, TYPES, FUNCTIONS, ...                                  *
  * ========================================================================== */
 
 /**
@@ -94,46 +94,47 @@ const VUE_TS_SHIM_INDEX = [
  * **NOTE** The `__FILENAME__` token in this _must_ be replaced with the
  * _base name_ of the actual template file (e.g. `file.vue`).
  */
-const VUE_TS_SHIM_FILE_TEMPLATE = [
+const VUE_TS_SHIM_VUE_TEMPLATE = [
   'import "./__FILENAME__/render";',
   'export * from "./__FILENAME__/script";',
   'import _default_ from "./__FILENAME__/script";',
   'export default _default_;',
 ].join('\n')
 
+/** A quick function converting the shim template above in a proper shim */
+function vueTsShimVue(fileName: string) {
+  const name = basename(fileName)
+  return VUE_TS_SHIM_VUE_TEMPLATE
+      .replace(/__FILENAME__/gm, name)
+}
+
 /** The extension for the vue files to consider */
 const VUE_EXT = '.vue'
 /** The length of the `.vue` extension (it's 4, doh!) */
 const VUE_LEN = VUE_EXT.length
+
+/** The pseudo-file suffix for the index file, `/index.ts` */
+const VUE_PSEUDO_INDEX_SFX = `${sep}index.ts`
 /** The pseudo-file extension for the index file, `.vue/index.ts` */
-const VUE_PSEUDO_INDEX_EXT = `${VUE_EXT}${sep}index.ts`
+const VUE_PSEUDO_INDEX_EXT = `${VUE_EXT}${VUE_PSEUDO_INDEX_SFX}`
 /** The number of characters to cut to convert a pseudo index into a file */
-const VUE_PSEUDO_INDEX_CUT = VUE_PSEUDO_INDEX_EXT.length - VUE_LEN
+const VUE_PSEUDO_INDEX_LEN = VUE_PSEUDO_INDEX_SFX.length
+
+/** The pseudo-file suffix for the render file, `/render.ts` */
+const VUE_PSEUDO_RENDER_SFX = `${sep}render.ts`
 /** The pseudo-file extension for the render file, `.vue/render.ts` */
-const VUE_PSEUDO_RENDER_EXT = `${VUE_EXT}${sep}render.ts`
+const VUE_PSEUDO_RENDER_EXT = `${VUE_EXT}${VUE_PSEUDO_RENDER_SFX}`
 /** The number of characters to cut to convert a pseudo render into a file */
-const VUE_PSEUDO_RENDER_CUT = VUE_PSEUDO_RENDER_EXT.length - VUE_LEN
+const VUE_PSEUDO_RENDER_LEN = VUE_PSEUDO_RENDER_SFX.length
+
+/** The pseudo-file suffix for the script file, `/script.ts` */
+const VUE_PSEUDO_SCRIPT_SFX = `${sep}script.ts`
 /** The pseudo-file extension for the script file, `.vue/render.ts` */
-const VUE_PSEUDO_SCRIPT_EXT = `${VUE_EXT}${sep}script.ts`
+const VUE_PSEUDO_SCRIPT_EXT = `${VUE_EXT}${VUE_PSEUDO_SCRIPT_SFX}`
 /** The number of characters to cut to convert a pseudo script into a file */
-const VUE_PSEUDO_SCRIPT_CUT = VUE_PSEUDO_SCRIPT_EXT.length - VUE_LEN
+const VUE_PSEUDO_SCRIPT_CUT = VUE_PSEUDO_SCRIPT_SFX.length
 
 /* ========================================================================== */
-
-/**
- * The result of the resolution of a pseudo file-name.
- *
- * This union can be one of:
- * - { fileName: undefined, templateFileName: undefined } // file not found
- * - { fileName: string,    templateFileName: undefined } // non-pseudo file
- * - { fileName: string,    templateFileName: string }    // pseudo-file
- */
-type ResolvedPseudoFile =
-    { fileName: string, templateFileName?: string } |
-    { fileName: string | undefined, templateFileName?: undefined }
-
-/** A constant for _file not found_ */
-const NOT_FOUND: ResolvedPseudoFile = { fileName: undefined }
 
 /** HACK ZONE: hijack the `SourceFile` to include our `Transpiled` instance */
 declare module 'typescript/lib/typescript' {
@@ -149,39 +150,79 @@ declare module 'typescript/lib/typescript' {
 }
 
 /**
- * Return the _actual_ template file name `/dir/file.vue` from a pseudo file
- * name (e.g. `/dir/file.vue/index.ts`) if and only if it exists on disk
-*/
-function resolvePseudoFileName(maybeRelativeFileName: string): ResolvedPseudoFile {
+ * Resolve a potentially non absolute file name into a tuple comprising of
+ * `[ fileName, templateFileName ]`.
+ *
+ * This can return:
+ *
+ * `[ ]` : the _empty_ tuple indicates that the file doesn't exist on disk
+ *
+ * `[ fileName ]` : the (now resolved) `fileName` exists on disk, but is not
+ *                  a pseudo-file (not part of a Vue template)
+ *
+ * `[ fileName, templateFileName ]` : the (now resolved) `fileName` refers to a
+ *                                    pseudo file, and its contents are derived
+ *                                    from the (now resolved) `templateFileName`
+ *
+ * Examples:
+ *
+ * - Calling `resolvePseudoFileName('dir/file.vue/render.ts')` will return
+ *   `[ '/cwd/dir/file.vue/render.ts', '/cwd/dir/file.vue' ]`
+ *
+ * - Calling `resolvePseudoFileName('dir/file.vue')` will return
+ *   `[ '/cwd/dir/file.vue', '/cwd/dir/file.vue' ]`
+ *   _(here `fileName` is the same as the `templateFileName`)_
+ *
+ * - Calling `resolvePseudoFileName('dir/file.ts')` will return
+ *   `[ '/cwd/dir/file.ts' ]`
+ *   _(here there is no `templateFileName`)_
+ */
+function resolvePseudoFileName(maybeRelativeFileName: string): [] | [ string ] | [ string, string ] {
   const fileName = resolveFileName(maybeRelativeFileName)
 
   let templateFileName: string
   if (fileName.endsWith(VUE_EXT)) {
-    return sys.fileExists(fileName) ? { fileName, templateFileName: fileName } : NOT_FOUND // not our extensions
-    // return NOT_FOUND // no ".vue" _file_ is allowed to exist in our pseudo tree
+    templateFileName = fileName
   } else if (fileName.endsWith(VUE_PSEUDO_INDEX_EXT)) {
-    templateFileName = fileName.substr(0, fileName.length - VUE_PSEUDO_INDEX_CUT)
+    templateFileName = fileName.substr(0, fileName.length - VUE_PSEUDO_INDEX_LEN)
   } else if (fileName.endsWith(VUE_PSEUDO_RENDER_EXT)) {
-    templateFileName = fileName.substr(0, fileName.length - VUE_PSEUDO_RENDER_CUT)
+    templateFileName = fileName.substr(0, fileName.length - VUE_PSEUDO_RENDER_LEN)
   } else if (fileName.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
     templateFileName = fileName.substr(0, fileName.length - VUE_PSEUDO_SCRIPT_CUT)
   } else {
-    return sys.fileExists(fileName) ? { fileName } : NOT_FOUND // not our extensions
+    return sys.fileExists(fileName) ? [ fileName ] : []
   }
 
   // This _could_ be a pseudo-file, or we can have a directory called "dir.vue"
   if (sys.directoryExists(templateFileName)) {
-    return sys.fileExists(fileName) ? { fileName } : NOT_FOUND
+    return sys.fileExists(fileName) ? [ fileName ] : []
   } else {
-    return sys.fileExists(templateFileName) ? { fileName, templateFileName } : NOT_FOUND
+    return sys.fileExists(templateFileName) ? [ fileName, templateFileName ] : []
   }
 }
 
-const MARK = '/Users/pier/Developer/juitnow/web-frontend-main/src/'
+/** A type aggregating our four `SourceFile` outputs for a VUE template */
+type TemplateSourceFiles = {
+  /** The shim for when we're looking for `/dir/file.vue` */
+  vue: SourceFile,
+  /** The shim for when we're looking for `/dir/file.vue/index.ts` */
+  index: SourceFile,
+  /** The code generated from <template> for `/dir/file.vue/render.ts` */
+  render: SourceFile,
+  /** The code generated from <script> for `/dir/file.vue/render.ts` */
+  script: SourceFile,
+  /** The `Transpiled` associated with this or _null_ for JS components */
+  transpiled: Transpiled | null
+}
+
+/* ========================================================================== *
+ * VUE COMPILER HOST FOR TYPESCRIPT                                           *
+ * ========================================================================== */
 
 /** The root of all evil, our Vue TypeScript `CompilerHost` */
 export class VueCompilerHost implements CompilerHost {
-  // private _cache = filesCache<SourceFile>()
+  private _sourcesCache = filesCache<SourceFile>()
+  private _templatesCache = filesCache<TemplateSourceFiles>()
 
   // Generate (or get a cached instance of) a `SourceFile` for the given file.
   // Here we'll transpile any `.vue` file into _some_ TypeScript code, the
@@ -194,78 +235,54 @@ export class VueCompilerHost implements CompilerHost {
       onError?: (message: string) => void,
       noCache?: boolean,
   ): SourceFile | undefined {
-    if (maybeRelativeFileName.match(/\.vue(\/|$)/)) {
-      console.log('GETSOURCE', maybeRelativeFileName, resolvePseudoFileName(maybeRelativeFileName))
-    }
+    const [ fileName, templateFileName ] = resolvePseudoFileName(maybeRelativeFileName)
 
-    const { fileName, templateFileName } = resolvePseudoFileName(maybeRelativeFileName)
-
-    // No file name ? NO SOURCE
+    // No fileName? No SourceFile!
     if (! fileName) return undefined
 
+    // If we don't have a templateFileName, this is a normal typescript file
     if (! templateFileName) {
-      const sourceContents = sys.readFile(fileName)
-      if (sourceContents === undefined) return undefined
-      return createSourceFile(fileName, sourceContents, languageVersion)
+      return this._sourcesCache(fileName, (fileName, contents) => {
+        return createSourceFile(fileName, contents, languageVersion)
+      }, onError, noCache)
     }
 
-    const templateSource = sys.readFile(templateFileName)
-    if (templateSource === undefined) return undefined
+    // We have a templateFileName, we can try to generate our code...
+    const templateSourceFiles = this._templatesCache(templateFileName, (templateFileName, contents) => {
+      const transpiled = transpile(templateFileName, contents)
 
-    const template = transpile(templateFileName, templateSource)
+      const indexFileName = templateFileName + VUE_PSEUDO_INDEX_SFX
+      const renderFileName = templateFileName + VUE_PSEUDO_RENDER_SFX
+      const scriptFileName = templateFileName + VUE_PSEUDO_SCRIPT_SFX
 
-    if (fileName.endsWith(VUE_PSEUDO_INDEX_EXT)) {
-      if (template === null) return createSourceFile(fileName, VUE_JS_SHIM, languageVersion)
-      console.log('SHIM1 SHIM1', '\n' + VUE_TS_SHIM_INDEX)
-      return createSourceFile(fileName, VUE_TS_SHIM_INDEX, languageVersion)
-    } else if (fileName.endsWith(VUE_PSEUDO_RENDER_EXT)) {
-      if (template === null) return undefined
-      console.log('RENDER RENDER', '\n' + template.render)
-      return createSourceFile(fileName, template.render, languageVersion)
-    } else if (fileName.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
-      if (template === null) return undefined
-      console.log('SCRIPT SCRIPT', '\n' + template.script)
-      return createSourceFile(fileName, template.script, languageVersion)
-    } else if (fileName.endsWith(VUE_EXT)) {
-      const name = basename(fileName)
-      const shim = VUE_TS_SHIM_FILE_TEMPLATE.replace(/__FILENAME__/gm, name)
-      console.log('SHIM2 SHIM2', '\n' + shim)
-      return createSourceFile(fileName, shim, languageVersion)
-      // return
-    }
+      return transpiled ? {
+        vue: createSourceFile(templateFileName, vueTsShimVue(templateFileName), languageVersion),
+        index: createSourceFile(indexFileName, VUE_TS_SHIM_INDEX, languageVersion),
+        render: createSourceFile(renderFileName, transpiled.render, languageVersion),
+        script: createSourceFile(scriptFileName, transpiled.script, languageVersion),
+        transpiled,
+      } : {
+        vue: createSourceFile(templateFileName, VUE_JS_SHIM, languageVersion),
+        index: createSourceFile(indexFileName, VUE_JS_SHIM, languageVersion),
+        render: createSourceFile(renderFileName, '', languageVersion),
+        script: createSourceFile(scriptFileName, '', languageVersion),
+        transpiled,
+      }
+    })
 
-    // const sourceFileName = templateFileName || fileName
+    console.log('GOTCHA', fileName)
 
-    // if (fileName?.endsWith('.vue')) {
-    //   return this.getSourceFile(
-    //       maybeRelativeFileName + '/index.ts',
-    //       languageVersion,
-    //       onError,
-    //       noCache,
-    //   )
-    // }
+    // This should never happen, as we always check for the file's existence
+    if (! templateSourceFiles) throw new Error(`Template unavailable for ${templateFileName}???`)
 
-    // if (sourceFileName === undefined) return undefined
+    // Return the correct `SourceFile` for the pseudo file we're looking for
+    if (fileName.endsWith(VUE_EXT)) return templateSourceFiles.vue
+    if (fileName.endsWith(VUE_PSEUDO_INDEX_SFX)) return templateSourceFiles.index
+    if (fileName.endsWith(VUE_PSEUDO_RENDER_SFX)) return templateSourceFiles.render
+    if (fileName.endsWith(VUE_PSEUDO_SCRIPT_SFX)) return templateSourceFiles.script
 
-    // return this._cache(sourceFileName, (fileName, sourceContents) => {
-    //   if (maybeRelativeFileName.match(/\.vue(\/|$)/) || fileName.startsWith(MARK)) {
-    //     console.log('CREATE', { fileName, templateFileName, sourceFileName })
-    //   }
-
-    // If this is _not_ a Vue file, we return it straigh away
-    // if (!(fileName.endsWith('.vue') || fileName.endsWith('.vue/index.ts'))) {
-    //   return createSourceFile(fileName, sourceContents, languageVersion)
-    // }
-
-    // This is a Vue file, we have some transpiling to do...
-    // const xpiled = transpile(fileName, sourceContents)
-    // const content = xpiled ? VUE_TS_TEMPLATE_SHIM : VUE_JS_TEMPLATE_SHIM
-
-    // const file = createSourceFile(fileName, content, languageVersion)
-    // file[transpiled] = xpiled
-    // return file
-
-    // }, onError, noCache)
+    // Also, this should never happen, as we always check all extensions
+    if (! templateSourceFiles) throw new Error(`Invalid pseudo file ${fileName}???`)
   }
 
   /** @deprecated don't use it in _this_ code */
@@ -287,38 +304,24 @@ export class VueCompilerHost implements CompilerHost {
     //
     // THAT SAID, it doesn't seem to be using the canonical filename representation
     // later when getting the _actual_ source for the file... Hmmm....
-
     let fileName = resolveFileName(maybeRelativeFileName)
 
     if (fileName.endsWith(VUE_EXT) && sys.fileExists(fileName)) {
       fileName = fileName.substr(0, fileName.length - VUE_LEN) + VUE_PSEUDO_INDEX_EXT
     }
 
-    if (! sys.useCaseSensitiveFileNames) fileName = fileName.toLowerCase()
-
-    if (fileName.match(/\.vue(\/|$)/)) {
-      console.log('RESOLVE', maybeRelativeFileName)
-      console.log('-------', fileName)
-    }
-
-    return fileName
+    return sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase()
   }
 
   /** @deprecated don't use it in _this_ code */
   fileExists(maybeRelativeFileName: string): boolean {
-    if (maybeRelativeFileName.match(/\.vue(\/|$)/)) {
-      console.log('EXISTS', maybeRelativeFileName, resolvePseudoFileName(maybeRelativeFileName))
-    }
-    const { fileName } = resolvePseudoFileName(maybeRelativeFileName)
+    const [ fileName ] = resolvePseudoFileName(maybeRelativeFileName)
     return fileName != undefined
   }
 
   /** @deprecated don't use it in _this_ code */
   readFile(maybeRelativeFileName: string): string | undefined {
-    if (maybeRelativeFileName.match(/\.vue(\/|$)/)) {
-      console.log('READ', maybeRelativeFileName, resolvePseudoFileName(maybeRelativeFileName))
-    }
-    const { fileName, templateFileName } = resolvePseudoFileName(maybeRelativeFileName)
+    const [ fileName, templateFileName ] = resolvePseudoFileName(maybeRelativeFileName)
     if (templateFileName !== undefined) return sys.readFile(templateFileName)
     if (fileName !== undefined ) return sys.readFile(fileName)
   }
