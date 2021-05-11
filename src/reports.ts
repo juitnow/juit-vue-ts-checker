@@ -216,7 +216,9 @@ function reportLocationForTranspiledPosition(
     length?: number,
 ): Report['location'] | undefined {
   const position = getLineAndCharacterOfPosition(file, start)
+  return undefined
 
+  /*
   // Make sure we have a source map consumer (lazy init)
   if (! transpiled.sourceMapConsumer) {
     transpiled.sourceMapConsumer = new SourceMapConsumer(transpiled.sourceMap)
@@ -255,4 +257,5 @@ function reportLocationForTranspiledPosition(
     context: contextLine,
     contextLength: contextLength,
   }
+  */
 }

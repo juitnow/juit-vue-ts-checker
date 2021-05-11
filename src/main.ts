@@ -5,15 +5,13 @@ function check(fileName: string): void {
 
   const now = Date.now()
   const reports = checker.check(fileName)
-  console.log('TIME 1', Date.now() - now, 'reports', reports.length)
+  // console.log('TIME 1', Date.now() - now, 'reports', reports.length)
 
-  const now2 = Date.now()
-  checker.check(fileName)
-  console.log('TIME2 ', Date.now() - now2, 'reports', reports.length)
+  // const now2 = Date.now()
+  // checker.check(fileName)
+  // console.log('TIME2 ', Date.now() - now2, 'reports', reports.length)
 
   console.log('TOTAL TIME', Date.now() - now)
-  // console.log(reports)
-
 
   for (const report of reports.sort()) {
     console.log()
@@ -34,8 +32,10 @@ function check(fileName: string): void {
   }
 }
 
-check('src/main.ts')
 console.log('======================')
+// check('src/main.ts')
+check('src/App.vue')
+// check('src/App.vue/index.ts')
 // check('src/components/faq.vue')
 
 // check('src/components/faq.vue/index.ts')

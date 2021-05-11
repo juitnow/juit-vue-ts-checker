@@ -34,17 +34,18 @@ import { SourceMapConsumer, RawSourceMap } from 'source-map'
 
 /** Internal interface between transpiler and compiler */
 export interface Transpiled {
-  /** The content (typescript code) to be compiled */
-  content: string,
-  /** The original template, as read from the .vue file */
-  template: string,
-  /** The source map we generated during transpilation */
-  sourceMap: RawSourceMap,
+  /** The original template code, as read from the .vue file */
+  source: string
 
-  /** For reporting: we split the template in lines, if we have to */
-  templateLines?: string[],
-  /** For reporting: a `SourceMapConsumer` we can query for locations */
-  sourceMapConsumer?: SourceMapConsumer,
+  /** The extracted <script> part of the code */
+  script: string
+  /** The source map for the extracted <script> part of the code */
+  scriptSourceMap: RawSourceMap
+
+  /** The render function generated from <template> */
+  render: string
+  /** The source map for the render function generated from <template> */
+  renderSourceMap: RawSourceMap
 }
 
 /** A key used to augmnet a TypeScript `SourceFile` with a `Transpiled` */
@@ -61,6 +62,7 @@ export function transpile(fileName: string, source: string): Transpiled | null {
   if (! vue.script) throw new Error(`No script produced for ${fileName}`)
   if (! vue.script.map) throw new Error(`No source map produced for ${fileName}`)
 
+  // We really want typescript here, otherwise there's nothing we can do...
   if (vue.script.lang !== 'ts') return null
 
   if (! vue.template) throw new Error(`No template produced for ${fileName}`)
@@ -87,6 +89,15 @@ export function transpile(fileName: string, source: string): Transpiled | null {
   // We need source maps, our reports are useless otherwise
   if (! template.map) throw new Error(`No render function source map produced for ${fileName}`)
 
+  return {
+    source: source,
+    script: vue.script.content,
+    scriptSourceMap: vue.script.map,
+    render: template.code,
+    renderSourceMap: template.map,
+  }
+
+  /*
   // This is tha AST of the Vue "render(...)" function
   const render = parseAst(template.code, fileName, template.map)
 
@@ -196,6 +207,7 @@ export function transpile(fileName: string, source: string): Transpiled | null {
 
   // Done.. Return our content and sourceMap
   return { content: generated.code, template: source, sourceMap: generatedMap }
+  */
 }
 
 // Parse some typescript code into an AST, update all of the AST locations
