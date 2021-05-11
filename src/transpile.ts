@@ -22,6 +22,7 @@ import {
   tsTypeParameterInstantiation,
   tsTypeQuery,
   tsTypeReference,
+  traverseFast,
   variableDeclaration,
   variableDeclarator,
 } from '@babel/types'
@@ -226,15 +227,17 @@ function parseAst(code: string, fileName: string, sourceMap: RawSourceMap): File
     }
   }
 
-  traverse(ast, {
-    enter(path) {
-      if (path.node.loc) {
-        const start = translate(path.node.loc.start)
-        const end = translate(path.node.loc.end)
-        if (!(start && end)) path.node.loc = null
-      }
-    },
+  traverseFast(ast, (node) => {
+    if (node.loc) {
+      const start = translate(node.loc.start)
+      const end = translate(node.loc.end)
+      if (!(start && end)) node.loc = null
+    }
   })
+  // traverse(ast, {
+  //   enter(path) {
+  //   },
+  // })
 
   return ast
 }
