@@ -3,7 +3,10 @@
  * ========================================================================== */
 import crypto from 'crypto'
 
-import { compileTemplate, parse as parseVueSFC } from '@vue/compiler-sfc'
+import {
+  compileTemplate,
+  parse as parseVueSFC,
+} from '@vue/compiler-sfc'
 
 import generate from '@babel/generator'
 import { traverse } from '@babel/core'
@@ -65,7 +68,7 @@ export function transpile(fileName: string, source: string): Transpiled | null {
 
   // Our script here is the AST representation of our <script>...</script>
   const script = parseAst(vue.script.content, fileName, vue.script.map)
-  const templateId = crypto.createHash('sha256').update(fileName, 'utf8').digest('hex')
+  const templateId = crypto.createHash('sha256').update(fileName, 'utf8').digest('hex').substr(0, 8)
 
   // Genereate the "render(...)" function from the <template>...</template>
   const template = compileTemplate({
@@ -113,6 +116,7 @@ export function transpile(fileName: string, source: string): Transpiled | null {
   let id: Identifier | undefined = undefined
   let annotated = false
 
+  const now = Date.now()
   traverse(combined, {
     // export default defineComponent(...)
     ExportDefaultDeclaration(path) {
@@ -162,6 +166,7 @@ export function transpile(fileName: string, source: string): Transpiled | null {
       }
     },
   })
+  console.log('TRAVERSE IN', Date.now() - now)
 
   // If we can't annotate, fail... It'd be pointless anyway
   if (! annotated) throw new Error(`Unable to annontate render function for ${fileName}`)
@@ -172,6 +177,8 @@ export function transpile(fileName: string, source: string): Transpiled | null {
     sourceMaps: true,
     filename: fileName,
     sourceFileName: fileName,
+    // minified: true,
+    comments: false,
   }, source)
 
   // We need the source map, our reports would be pointless without
@@ -234,10 +241,6 @@ function parseAst(code: string, fileName: string, sourceMap: RawSourceMap): File
       if (!(start && end)) node.loc = null
     }
   })
-  // traverse(ast, {
-  //   enter(path) {
-  //   },
-  // })
 
   return ast
 }

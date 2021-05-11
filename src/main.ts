@@ -35,3 +35,42 @@ function check(fileName: string): void {
 }
 
 check('src/main.ts')
+
+const rrr = 'foo'
+{
+  const rrr = 'bar'
+  void rrr
+}
+
+void rrr
+// TODO: this creates an error
+// check('src/components/faq.vue')
+// check('src/components/faq.vue/index.ts')
+
+// /* eslint-disable */
+// import { parse as babelParse } from '@babel/parser'
+// import * as t from '@babel/types'
+// import generate from '@babel/generator'
+// // import
+
+// const id = t.identifier('foo')
+// const bl = t.tsModuleBlock([])
+// const md = t.tsModuleDeclaration(id, bl)
+
+// console.log('--------------')
+// console.log(generate(md, {
+//   // compact: true,
+//   // minified: true,
+// }).code)
+// console.log('--------------')
+
+// // module foo { export function bar() {} }
+
+// // const nodes =
+// // `module foo {
+// // export function bar() {}
+// // }`
+// // console.log(babelParse(nodes).program.body, {
+// //   plugins: [ 'typescript' ],
+// //   sourceType: 'module',
+// // })
