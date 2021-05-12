@@ -1,17 +1,4 @@
 import {
-  Transpiled,
-  transpiled,
-} from './transpile'
-
-import {
-  relativeFileName,
-} from './cache'
-
-import {
-  SourceMapConsumer,
-} from 'source-map'
-
-import {
   Diagnostic,
   DiagnosticCategory,
   SourceFile,
@@ -19,6 +6,8 @@ import {
   getLineAndCharacterOfPosition,
   sys,
 } from 'typescript'
+import { pseudoPath } from './lib/pseudo'
+import { cwd, PATH_SEP, resolve } from './lib/files'
 
 /* ========================================================================== *
  * EXPORTS                                                                    *
@@ -54,89 +43,29 @@ export interface Report {
 export interface Reports extends Array<Report> {
   readonly hasErrors: boolean
   readonly hasWarnings: boolean
+
+  addDiagnostics(diagnostics: Diagnostic[]): this
 }
 
-/**
- * Utility function to create a `Reports` instance.
- */
-export function makeReports(...reports: Report[]): Reports {
-  function hasErrors(this: Report[]): boolean {
-    const report = this.find((report) => report.isError)
-    return report?.isError || false
-  }
-
-  function hasWarnings(this: Report[]): boolean {
-    const report = this.find((report) => report.isWarning)
-    return report?.isWarning || false
-  }
-
-  function compare(a: Report, b: Report): number {
-    const msi = Number.MAX_SAFE_INTEGER
-    const { fileName: af = '' } = a
-    const { fileName: bf = '' } = b
-    const { line: al = msi, column: ac = msi } = a.location || {}
-    const { line: bl = msi, column: bc = msi } = b.location || {}
-
-    return af < bf ? -1 : // file
-           af > bf ? +1 : //
-           al < bl ? -1 : // line
-           al > bl ? +1 : //
-           ac < bc ? -1 : // column
-           ac > bc ? +1 : //
-           0
-  }
-
-  function sort(this: Report[], comparator?: (a: Report, b: Report) => number): Report[] {
-    Array.prototype.sort.call(this, comparator || compare)
-    return this
-  }
-
-  // Here "reports" is always a new array, as it comes from the ... operator
-  return Object.defineProperties(reports, {
-    hasErrors: { enumerable: true, get: hasErrors.bind(reports) },
-    hasWarnings: { enumerable: true, get: hasWarnings.bind(reports) },
+/** Generate an array of `Report`s from an array of `Diagnostic`s */
+export function makeReports(diagnostics?: Diagnostic[]): Reports {
+  const reports: Reports = Object.defineProperties([], {
+    hasErrors: { enumerable: true, get: hasErrors },
+    hasWarnings: { enumerable: true, get: hasWarnings },
+    addDiagnostics: { value: addDiagnostics },
     sort: { value: sort },
   })
-}
 
-/**
- * Generate an array of `Report`s from an array of `SourceFile`s.
- *
- * For now this function only checks if a `.vue` file could not be transpiled
- * because it was written in _JavaScript_ rather than _TypeScript_.
- *
- * If a `reports` array is specified, `Report`s will be added to it and the
- * same instance will be returned.
- */
-export function sourceFilesReport(
-    sourceFiles: Readonly<SourceFile[]>,
-    reports: Reports = makeReports(),
-): Reports {
-  sourceFiles.forEach((sourceFile) => {
-    const xpiled = sourceFile[transpiled]
-    if (xpiled === null) {
-      reports.push({
-        code: 0,
-        message: 'File is not a TypeScript-based Vue single file component',
-        severity: 'warning',
-        fileName: relativeFileName(sourceFile.fileName),
-      })
-    }
-  })
-
+  if (diagnostics) reports.addDiagnostics(diagnostics)
   return reports
 }
 
-/**
- * Generate an array of `Report`s from an array of `Diagnostic`s.
- *
- * If a `reports` array is specified, `Report`s will be added to it and the
- * same instance will be returned.
- */
-export function diagnosticsReport(
-    diagnostics: Readonly<Diagnostic[]>,
-    reports: Reports = makeReports(),
-): Reports {
+/* ========================================================================== *
+ * REPORTS PUBLIC METHODS                                                     *
+ * ========================================================================== */
+
+/** Add diagnostics to a `Reports` instance */
+function addDiagnostics(this: Reports, diagnostics: Readonly<Diagnostic[]>): Reports {
   diagnostics.forEach((diag) => {
     // The basics...
     const code = diag.code
@@ -160,25 +89,63 @@ export function diagnosticsReport(
 
       // If we have a position we can include it as well
       if (diag.start !== undefined) {
-        // If the file was transpiled by us, we have to look up the position
-        // in the original .vue template, using our source map
-        const xpiled = file[transpiled]
-        if (xpiled) {
-          report.location = reportLocationForTranspiledPosition(file, xpiled, diag.start, diag.length)
-        } else {
-          report.location = reportLocationForPosition(file, diag.start, diag.length)
-        }
+        report.location = reportLocationForPosition(file, diag.start, diag.length)
       }
     }
-    reports.push(report)
+    this.push(report)
   })
 
-  return reports
+  return this
+}
+
+/** Getter for `Reports.hasErrors` */
+function hasErrors(this: Report[]): boolean {
+  const report = this.find((report) => report.isError)
+  return report?.isError || false
+}
+
+/** Getter for `Reports.hasWarnings` */
+function hasWarnings(this: Report[]): boolean {
+  const report = this.find((report) => report.isWarning)
+  return report?.isWarning || false
+}
+
+/** Comparator for `Report` instances */
+function compare(a: Report, b: Report): number {
+  const msi = Number.MAX_SAFE_INTEGER
+  const { fileName: af = '' } = a
+  const { fileName: bf = '' } = b
+  const { line: al = msi, column: ac = msi } = a.location || {}
+  const { line: bl = msi, column: bc = msi } = b.location || {}
+
+  return af < bf ? -1 : // file
+         af > bf ? +1 : //
+         al < bl ? -1 : // line
+         al > bl ? +1 : //
+         ac < bc ? -1 : // column
+         ac > bc ? +1 : //
+         0
+}
+
+/** Sort a `Reports` instance in place */
+function sort(this: Report[], comparator?: (a: Report, b: Report) => number): Report[] {
+  Array.prototype.sort.call(this, comparator || compare)
+  return this
 }
 
 /* ========================================================================== *
  * INTERNALS                                                                  *
  * ========================================================================== */
+
+/** Return a relative file name in current working directory */
+function relativeFileName(path: string): string {
+  const pseudo = pseudoPath(path)
+
+  const file = pseudo.file || resolve(path)
+  const directory = cwd() + PATH_SEP
+
+  return file.startsWith(directory) ? file.substr(directory.length) : file
+}
 
 /** Create report location for a generic (non-Vue) associated file */
 function reportLocationForPosition(
@@ -208,54 +175,54 @@ function reportLocationForPosition(
   }
 }
 
-/** Create report location mapping it back to the original Vue file */
-function reportLocationForTranspiledPosition(
-    file: SourceFile,
-    transpiled: Transpiled,
-    start: number,
-    length?: number,
-): Report['location'] | undefined {
-  const position = getLineAndCharacterOfPosition(file, start)
-  return undefined
+// /** Create report location mapping it back to the original Vue file */
+// function reportLocationForTranspiledPosition(
+//     file: SourceFile,
+//     transpiled: Transpiled,
+//     start: number,
+//     length?: number,
+// ): Report['location'] | undefined {
+//   const position = getLineAndCharacterOfPosition(file, start)
+//   return undefined
 
-  /*
-  // Make sure we have a source map consumer (lazy init)
-  if (! transpiled.sourceMapConsumer) {
-    transpiled.sourceMapConsumer = new SourceMapConsumer(transpiled.sourceMap)
-  }
+//   /*
+//   // Make sure we have a source map consumer (lazy init)
+//   if (! transpiled.sourceMapConsumer) {
+//     transpiled.sourceMapConsumer = new SourceMapConsumer(transpiled.sourceMap)
+//   }
 
-  // Get the original position in the template
-  const originalPosition = transpiled.sourceMapConsumer.originalPositionFor({
-    line: position.line + 1,
-    column: position.character,
-  })
+//   // Get the original position in the template
+//   const originalPosition = transpiled.sourceMapConsumer.originalPositionFor({
+//     line: position.line + 1,
+//     column: position.character,
+//   })
 
-  // If we don't know the original position, or the original line... pointless
-  if (!(originalPosition && originalPosition.line)) return
+//   // If we don't know the original position, or the original line... pointless
+//   if (!(originalPosition && originalPosition.line)) return
 
-  // Make sure we have some lines (lazy init)
-  if (! transpiled.templateLines) {
-    transpiled.templateLines = transpiled.template.split('\n')
-  }
+//   // Make sure we have some lines (lazy init)
+//   if (! transpiled.templateLines) {
+//     transpiled.templateLines = transpiled.template.split('\n')
+//   }
 
-  // Get our context line
-  const { line, column = 0 } = originalPosition
-  const contextLine = transpiled.templateLines[line - 1]
+//   // Get our context line
+//   const { line, column = 0 } = originalPosition
+//   const contextLine = transpiled.templateLines[line - 1]
 
-  // Use a regenerated position's last column to calculate the length (if any)
-  let contextLength = length || 0
+//   // Use a regenerated position's last column to calculate the length (if any)
+//   let contextLength = length || 0
 
-  // If the end goes beyond one line, cut it to the end of it
-  if ((column + contextLength) > contextLine.length) {
-    contextLength = contextLine.length - column
-  }
+//   // If the end goes beyond one line, cut it to the end of it
+//   if ((column + contextLength) > contextLine.length) {
+//     contextLength = contextLine.length - column
+//   }
 
-  // All done!
-  return {
-    line: line,
-    column: column,
-    context: contextLine,
-    contextLength: contextLength,
-  }
-  */
-}
+//   // All done!
+//   return {
+//     line: line,
+//     column: column,
+//     context: contextLine,
+//     contextLength: contextLength,
+//   }
+//   */
+// }

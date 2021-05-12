@@ -1,4 +1,4 @@
-import { ResolvedPath, fileLastModified, fileRead } from './files'
+import { ResolvedPath, fileLastModified, fileRead, resolve } from './files'
 
 /** Our (internal) cache callback type */
 type Callback<T> = (contents: string) => T
@@ -7,18 +7,21 @@ type Callback<T> = (contents: string) => T
  * A function executing a callback if and only if the file it was invoked
  * with was changed since the last time it was called.
  */
-export type Cache<T> = (
+export type Cache<T> = ((
   /** The file name (maybe unresolved) of the file we are working on */
   file: ResolvedPath,
   /** The callback to operate in if we had a cache miss */
   callback: Callback<T>,
-) => T | undefined
+) => T | undefined) & {
+  /** Return the content of a cached item */
+  get(path: string): T | undefined
+}
 
 /** Create a caching function */
-export function cache<T>(): Cache<T> {
+export function createCache<T>(): Cache<T> {
   const _cache: Record<string, [ number, T ]> = {}
 
-  return function cache(file: ResolvedPath, callback: Callback<T>): T | undefined {
+  function cache(file: ResolvedPath, callback: Callback<T>): T | undefined {
     // If we have no timestamp (no file) we just wipe the cache and return
     const timestamp = fileLastModified(file)
     if (timestamp === undefined) {
@@ -45,4 +48,12 @@ export function cache<T>(): Cache<T> {
     _cache[file] = [ timestamp, result ]
     return result
   }
+
+  // Inject our "get" method on the cache
+  return Object.defineProperty(cache, 'get', {
+    value: (path: string): T | undefined => {
+      const file = resolve(path)
+      if (file in _cache) return _cache[file][1]
+    },
+  })
 }

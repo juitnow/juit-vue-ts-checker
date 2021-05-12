@@ -1,96 +1,68 @@
-import {
-  VueCompilerHost,
-} from './compiler'
-
-import { filesCache,
-  resolveFileName,
-} from './cache'
-
-import { diagnosticsReport,
-  Reports,
-  makeReports,
-  sourceFilesReport,
-} from './reports'
+import { VueLanguageServiceHost } from './compiler'
+import { createCache } from './lib/cache'
+import { logger } from './lib/logger'
 
 import {
-  CompilerHost,
-  CompilerOptions,
+  Diagnostic,
+  LanguageService,
   convertCompilerOptionsFromJson,
-  createProgram,
-  getDefaultCompilerOptions,
-  getPreEmitDiagnostics,
+  createLanguageService,
   readConfigFile,
   sys,
 } from 'typescript'
 
-
-// An internal tuple for our internal state
-type CheckerState = [ CompilerOptions, CompilerHost, Reports ]
+import {
+  ResolvedPath,
+  cwd,
+  resolve,
+} from './lib/files'
+import { makeReports, Reports } from './reports'
 
 export class Checker {
-  private _state: () => CheckerState
+  private readonly _log = logger('language service')
+  private readonly cache = createCache<LanguageService>()
 
-  constructor(tsConfigFileName?: string) {
-    if (tsConfigFileName) {
-      // If we have a config file name, the "state" will be resolved during
-      // "check", and our cache will make sure that everything is reinitialized
-      // correctly when the config filename changes on disk...
-      const cache = filesCache<CheckerState>()
-      this._state = (): CheckerState => {
-        const state = cache(tsConfigFileName, (resolvedConfigFileName) => {
-          const json = readConfigFile(resolvedConfigFileName, sys.readFile)
-          const jsonOptions = json.config.compilerOptions
-          const { options, errors } = convertCompilerOptionsFromJson(jsonOptions, sys.getCurrentDirectory())
-          const reports = diagnosticsReport(errors)
-          return [ options, new VueCompilerHost(), reports ]
-        })
+  private readonly configFile: ResolvedPath
 
-        if (state) return state
+  private currentLanguageService?: LanguageService
+  private initialDiagnostics!: Diagnostic[]
+  private currentHost!: VueLanguageServiceHost
 
-        const options = getDefaultCompilerOptions()
-        const host = new VueCompilerHost()
-        return [ options, host, makeReports({
-          code: 0,
-          message: 'File not found',
-          severity: 'error',
-          fileName: tsConfigFileName,
-        }) ]
-      }
-    } else {
-      // If we don't have a config file, we just use some defaults
-      // and we never end up recreating the compiler host...
-      const options = getDefaultCompilerOptions()
-      const host = new VueCompilerHost()
-      const reports = makeReports()
-      this._state = (): CheckerState => [ options, host, reports ]
-    }
+  constructor(path: string) {
+    this.configFile = resolve(path)
   }
 
-  check(...files: string[]): Reports {
-    // This will get our options, host and some initial reports related to the
-    // parsing of our "tsconfig.json" file... If the "tsconfig.json" changes
-    // the options will be re-parsed, host recreated and reports re-generated
-    const [ options, host, initialReports ] = this._state()
+  check(path: string): Reports {
+    const service = this.cache(this.configFile, () => {
+      this._log.info('Reloading compiler options from', this.configFile)
 
-    // Clone our initial reports, and bail on errors
-    const reports = makeReports(...initialReports)
-    if (reports.hasErrors) return reports
+      // Use TypeScript to read the file, it might have extends/imports/...
+      const contents = readConfigFile(this.configFile, sys.readFile)
+      const json = contents.config.compilerOptions
+      const { options, errors } = convertCompilerOptionsFromJson(json, cwd())
+      this.initialDiagnostics = errors
+      this.currentHost = new VueLanguageServiceHost(options)
+      return createLanguageService(this.currentHost)
+    })
 
-    // Resolve all our files before passing it off to the compiler
-    const resolvedFiles: string[] = files.map(resolveFileName)
+    if (! service) throw new Error('Unable to find ' + this.configFile)
 
-    console.log('CHECKING', resolvedFiles)
+    if (this.currentLanguageService && (this.currentLanguageService != service)) {
+      this._log.debug('Disposing of existing Vue Language Service')
+      this.currentLanguageService.dispose()
+    }
+    this.currentLanguageService = service
 
-    // Create a new "program" for TypeScript.. The host caches all internal
-    // `SourceFile`s for us, so we're pretty much ok running over and over...
-    const program = createProgram(resolvedFiles, options, host)
-    sourceFilesReport(program.getSourceFiles(), reports)
-    diagnosticsReport(getPreEmitDiagnostics(program), reports)
+    const reports = makeReports(this.initialDiagnostics)
 
-    // We _should_ be safe not running the `emit(...)` part of the process.
-    // Theoretically that will just _render_ the various TypeScript ASTs into
-    // some JS code, while running some optional transformers. As we do not
-    // write files, but only check, the "createProgram" stage should suffice...
+    const files = this.currentHost.addScriptFileName(path)
+    for (const file of files) {
+      this._log.info('Checking', file)
+      reports.addDiagnostics(service.getSemanticDiagnostics(file))
+      reports.addDiagnostics(service.getSyntacticDiagnostics(file))
+      reports.addDiagnostics(service.getSuggestionDiagnostics(file))
+    }
+
     return reports
   }
 }

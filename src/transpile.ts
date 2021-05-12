@@ -29,8 +29,15 @@ import * as t from '@babel/types'
 
 import { SourceMapConsumer, RawSourceMap } from 'source-map'
 
+/* ========================================================================== *
+ * EXPORTED TYPES                                                             *
+ * ========================================================================== */
+
 /** Internal interface between transpiler and compiler */
 export interface Transpiled {
+  /** Whether this instance was really transpiled or just a shim */
+  transpiled: boolean
+
   /** The original template code, as read from the .vue file */
   source: string
 
@@ -45,11 +52,30 @@ export interface Transpiled {
   renderSourceMap: RawSourceMap
 }
 
-/** A key used to augmnet a TypeScript `SourceFile` with a `Transpiled` */
-export const transpiled = Symbol()
+/* ========================================================================== *
+ * INTERNAL CONSTANTS                                                         *
+ * ========================================================================== */
 
-// Transpile a .vue file into a properly annotated .ts file
-export function transpile(fileName: string, source: string): Transpiled | null {
+/** An empty source map */
+const EMPTY_SOURCE_MAP: RawSourceMap = { version: '3', sources: [], names: [], mappings: '' }
+
+/** A shim for a JavaScript <script> */
+const EMPTY_SCRIPT = [
+  'import { defineComponent } from "vue";',
+  'export default defineComponent({});',
+].join('\n')
+
+/** A shim for a JavaScript <template> */
+const EMPTY_RENDER = [
+  'export function render() {}',
+].join('\n')
+
+/* ========================================================================== *
+ * OUR ANNOTATING TRANSPILER                                                  *
+ * ========================================================================== */
+
+/** Transpile a `.vue` file into a `Transpiled` instance */
+export function transpile(fileName: string, source: string): Transpiled {
   // Ask @vue/compiler-sfc to parse the .vue file, splitting it nicely...
   const { descriptor: vue } = parseVueSFC(source, {
     filename: fileName,
@@ -63,10 +89,21 @@ export function transpile(fileName: string, source: string): Transpiled | null {
   assert(vue.template.map, `No template source map produced for ${fileName}`)
 
   // We really want typescript here, otherwise there's nothing we can do...
-  if (vue.script.lang !== 'ts') return null
+  // ... or to be honest, we could send the whole thing back and let TypeScript
+  // try to generate types from JavaScript (its magic), buuut...
+  if (vue.script.lang !== 'ts') {
+    return {
+      transpiled: false,
+      source,
+      script: EMPTY_SCRIPT,
+      scriptSourceMap: EMPTY_SOURCE_MAP,
+      render: EMPTY_RENDER,
+      renderSourceMap: EMPTY_SOURCE_MAP,
+    }
+  }
 
   // Our script here is the AST representation of our <script>...</script>
-  const id = crypto.createHash('sha256').update(fileName, 'utf8').digest('hex').substr(0, 8)
+  const id = crypto.createHash('sha256').update(source, 'utf8').digest('hex').substr(0, 8)
 
   // Genereate the "render(...)" function from the <template>...</template>
   const template = compileTemplate({
@@ -143,20 +180,13 @@ export function transpile(fileName: string, source: string): Transpiled | null {
 
   // Well, we're actually done here!
   return {
+    transpiled: true,
     source: source,
     script: vue.script.content,
     scriptSourceMap: vue.script.map,
     render: generated.code,
-    renderSourceMap: {
-      // Silly... Babel source maps and SourceMap source maps are incompatble
-      version: generated.map.version === undefined ? '3' : generated.map.version.toString(),
-      sources: generated.map.sources,
-      names: generated.map.names,
-      sourceRoot: generated.map.sourceRoot,
-      sourcesContent: generated.map.sourcesContent,
-      mappings: generated.map.mappings,
-      file: generated.map.file,
-    },
+    // Silly... Babel source maps and SourceMap source maps are incompatible
+    renderSourceMap: Object.assign(generated.map, { version: generated.map.version.toString() }),
   }
 }
 
