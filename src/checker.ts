@@ -4,7 +4,7 @@ import {
 
 import { filesCache,
   resolveFileName,
-} from './files'
+} from './cache'
 
 import { diagnosticsReport,
   Reports,

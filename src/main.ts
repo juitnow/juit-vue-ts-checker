@@ -1,4 +1,10 @@
+import { report } from 'process'
+import ts, { createLanguageService, Diagnostic, sys } from 'typescript'
+import { formatWithOptions } from 'util'
 import { Checker } from './checker'
+import { VueLanguageServiceHost } from './language-service-host'
+// import { VueDocumentRegistry, VueLanguageServiceHost } from './language'
+import { diagnosticsReport } from './reports'
 
 function check(fileName: string): void {
   const checker = new Checker('tsconfig.json')
@@ -32,9 +38,44 @@ function check(fileName: string): void {
   }
 }
 
+
+function xreport(diags: Diagnostic[]) {
+  console.log('FOUND', diags.length, 'DIAGS')
+  console.log(ts.formatDiagnosticsWithColorAndContext(diags, {
+    getCurrentDirectory: () => sys.getCurrentDirectory(),
+    getCanonicalFileName: (f) => f,
+    getNewLine: () => '\n',
+  }))
+}
+
+
+function check2(fileName: string) {
+  const host = new VueLanguageServiceHost()
+  const foo = createLanguageService(host)
+
+  foo.getProgram()?.getOptionsDiagnostics
+  console.log('HERE')
+
+  const x = host.addScriptFileName(fileName)
+  console.log('X IS', x)
+
+  for (const i of x) {
+    console.log('CHJECKING', i)
+    xreport(foo.getSemanticDiagnostics(i))
+    xreport(foo.getSyntacticDiagnostics(i))
+    xreport(foo.getSuggestionDiagnostics(i))
+  }
+}
+
 console.log('======================')
-// check('src/main.ts')
-check('src/App.vue')
+try {
+  // check2('src/main.ts')
+  check2('src/components/faq.vue')
+} catch (error) {
+  console.log(error.stack || error)
+  console.dir(error)
+}
+// check('src/App.vue')
 // check('src/App.vue/index.ts')
 // check('src/components/faq.vue')
 

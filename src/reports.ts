@@ -5,7 +5,7 @@ import {
 
 import {
   relativeFileName,
-} from './files'
+} from './cache'
 
 import {
   SourceMapConsumer,
