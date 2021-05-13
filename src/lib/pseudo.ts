@@ -59,23 +59,8 @@ const VUE_PSEUDO_SCRIPT_CUT = VUE_PSEUDO_SCRIPT_SFX.length
 export function pseudoPath(path: string): PseudoPath {
   const file = resolve(path)
 
-  let vue: ResolvedPath
-  let type: 'vue' | 'index' | 'render' | 'script'
-  if (file.endsWith(VUE_EXT)) {
-    vue = file
-    type = 'vue'
-  } else if (file.endsWith(VUE_PSEUDO_INDEX_EXT)) {
-    vue = file.substr(0, file.length - VUE_PSEUDO_INDEX_LEN) as ResolvedPath
-    type = 'index'
-  } else if (file.endsWith(VUE_PSEUDO_RENDER_EXT)) {
-    vue = file.substr(0, file.length - VUE_PSEUDO_RENDER_LEN) as ResolvedPath
-    type = 'render'
-  } else if (file.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
-    vue = file.substr(0, file.length - VUE_PSEUDO_SCRIPT_CUT) as ResolvedPath
-    type = 'script'
-  } else {
-    return fileExists(file) ? { file } : { }
-  }
+  const [ vue, type ] = pseudoType(file)
+  if (vue == undefined) return fileExists(file) ? { file } : { }
 
   // This _could_ be a pseudo-file, or we can have a directory called "dir.vue"
   if (directoryExists(vue)) {
@@ -88,5 +73,22 @@ export function pseudoPath(path: string): PseudoPath {
       script: vue + VUE_PSEUDO_SCRIPT_SFX as ResolvedPath,
       type,
     } : { }
+  }
+}
+
+/** Resolve the _type_ of a potential `PseudoPath` (no checks performed) */
+export function pseudoType(path: string): [ ResolvedPath, 'vue' | 'index' | 'render' | 'script' ] | [] {
+  const file = resolve(path)
+
+  if (file.endsWith(VUE_EXT)) {
+    return [ file, 'vue' ]
+  } else if (file.endsWith(VUE_PSEUDO_INDEX_EXT)) {
+    return [ file.substr(0, file.length - VUE_PSEUDO_INDEX_LEN) as ResolvedPath, 'index' ]
+  } else if (file.endsWith(VUE_PSEUDO_RENDER_EXT)) {
+    return [ file.substr(0, file.length - VUE_PSEUDO_RENDER_LEN) as ResolvedPath, 'render' ]
+  } else if (file.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
+    return [ file.substr(0, file.length - VUE_PSEUDO_SCRIPT_CUT) as ResolvedPath, 'script' ]
+  } else {
+    return []
   }
 }
