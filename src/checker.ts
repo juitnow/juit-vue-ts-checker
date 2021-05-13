@@ -1,6 +1,5 @@
 import { VueLanguageServiceHost } from './compiler'
 import { createCache } from './lib/cache'
-import { logger } from './lib/logger'
 
 import {
   Diagnostic,
@@ -18,8 +17,13 @@ import {
 } from './lib/files'
 import { makeReports, Reports } from './reports'
 
+import { logger } from './lib/logger'
+import { k, w } from './lib/colors'
+import { pseudoPath } from './lib/pseudo'
+const log = logger('language service')
+
+
 export class Checker {
-  private readonly _log = logger('language service')
   private readonly cache = createCache<LanguageService>()
 
   private readonly configFile: ResolvedPath
@@ -32,9 +36,9 @@ export class Checker {
     this.configFile = resolve(path)
   }
 
-  check(path: string): Reports {
+  check(...paths: string[]): Reports {
     const service = this.cache(this.configFile, () => {
-      this._log.info('Reloading compiler options from', this.configFile)
+      log.info('Reloading compiler options from', w(this.configFile))
 
       // Use TypeScript to read the file, it might have extends/imports/...
       const contents = readConfigFile(this.configFile, sys.readFile)
@@ -48,21 +52,35 @@ export class Checker {
     if (! service) throw new Error('Unable to find ' + this.configFile)
 
     if (this.currentLanguageService && (this.currentLanguageService != service)) {
-      this._log.debug('Disposing of existing Vue Language Service')
+      log.debug('Disposing of existing Vue Language Service')
       this.currentLanguageService.dispose()
     }
     this.currentLanguageService = service
 
-    const reports = makeReports(this.initialDiagnostics)
+    const reports = makeReports(this.currentHost, this.initialDiagnostics)
+    if (reports.hasErrors) return reports
 
-    const files = this.currentHost.addScriptFileName(path)
+    const files = paths.reduce((files, path) => {
+      files.push(...this.currentHost.addScriptFileName(path))
+      return files
+    }, [] as ResolvedPath[])
+
     for (const file of files) {
-      this._log.info('Checking', file)
+      if (log.isInfoEnabled) {
+        const pseudo = pseudoPath(file)
+        if (pseudo.type) {
+          if (pseudo.type === 'render') log.info('Checking', w(pseudo.file), k('(template)'))
+          if (pseudo.type === 'script') log.info('Checking', w(pseudo.file), k('(script)'))
+        } else if (pseudo.file) {
+          log.info('Checking', w(pseudo.file))
+        }
+      }
+
       reports.addDiagnostics(service.getSemanticDiagnostics(file))
       reports.addDiagnostics(service.getSyntacticDiagnostics(file))
-      reports.addDiagnostics(service.getSuggestionDiagnostics(file))
+      // no suggestions diagnostics... they are too informative in templates :-)
     }
 
-    return reports
+    return reports.sort()
   }
 }
