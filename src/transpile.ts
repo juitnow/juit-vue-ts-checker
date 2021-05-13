@@ -38,18 +38,19 @@ export interface Transpiled {
   /** Whether this instance was really transpiled or just a shim */
   transpiled: boolean
 
-  /** The original template code, as read from the .vue file */
-  source: string
-
   /** The extracted <script> part of the code */
   script: string
   /** The source map for the extracted <script> part of the code */
   scriptSourceMap: RawSourceMap
+  /** The (prepared) `SourceMapConsumer` for the extracted <script> */
+  scriptSourceMapConsumer?: SourceMapConsumer
 
   /** The render function generated from <template> */
   render: string
   /** The source map for the render function generated from <template> */
   renderSourceMap: RawSourceMap
+  /** The (prepared) `SourceMapConsumer` for the generated <template> */
+  renderSourceMapConsumer?: SourceMapConsumer
 }
 
 /* ========================================================================== *
@@ -94,7 +95,6 @@ export function transpile(fileName: string, source: string): Transpiled {
   if (vue.script.lang !== 'ts') {
     return {
       transpiled: false,
-      source,
       script: EMPTY_SCRIPT,
       scriptSourceMap: EMPTY_SOURCE_MAP,
       render: EMPTY_RENDER,
@@ -181,7 +181,6 @@ export function transpile(fileName: string, source: string): Transpiled {
   // Well, we're actually done here!
   return {
     transpiled: true,
-    source: source,
     script: vue.script.content,
     scriptSourceMap: vue.script.map,
     render: generated.code,
