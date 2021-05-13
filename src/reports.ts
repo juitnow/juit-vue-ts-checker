@@ -6,8 +6,11 @@ import {
   getLineAndCharacterOfPosition,
   sys,
 } from 'typescript'
+
 import { pseudoPath } from './lib/pseudo'
 import { cwd, PATH_SEP, resolve } from './lib/files'
+import { VueLanguageServiceHost } from './compiler'
+import { SourceMapConsumer } from 'source-map'
 
 /* ========================================================================== *
  * EXPORTS                                                                    *
@@ -47,9 +50,15 @@ export interface Reports extends Array<Report> {
   addDiagnostics(diagnostics: Diagnostic[]): this
 }
 
+interface ReportsInternal extends Reports {
+  readonly _getSourceMapConsumer: (path: string) => SourceMapConsumer | undefined
+}
+
 /** Generate an array of `Report`s from an array of `Diagnostic`s */
-export function makeReports(diagnostics?: Diagnostic[]): Reports {
+export function makeReports(host: VueLanguageServiceHost, diagnostics?: Diagnostic[]): Reports {
   const reports: Reports = Object.defineProperties([], {
+    _getSourceMapConsumer: { value: host.getSourceMapConsumer.bind(host) },
+
     hasErrors: { enumerable: true, get: hasErrors },
     hasWarnings: { enumerable: true, get: hasWarnings },
     addDiagnostics: { value: addDiagnostics },
@@ -65,7 +74,7 @@ export function makeReports(diagnostics?: Diagnostic[]): Reports {
  * ========================================================================== */
 
 /** Add diagnostics to a `Reports` instance */
-function addDiagnostics(this: Reports, diagnostics: Readonly<Diagnostic[]>): Reports {
+function addDiagnostics(this: ReportsInternal, diagnostics: Readonly<Diagnostic[]>): Reports {
   diagnostics.forEach((diag) => {
     // The basics...
     const code = diag.code
@@ -85,11 +94,18 @@ function addDiagnostics(this: Reports, diagnostics: Readonly<Diagnostic[]>): Rep
     // If we have a file we can include it...
     if (diag.file) {
       const file = diag.file
+
+      // At least we have a name...
       report.fileName = relativeFileName(file.fileName)
 
       // If we have a position we can include it as well
       if (diag.start !== undefined) {
-        report.location = reportLocationForPosition(file, diag.start, diag.length)
+        const sourceMap = this._getSourceMapConsumer(file.fileName)
+        if (sourceMap) {
+          reportLocationWithSourceMap(report, file, diag.start, diag.length, sourceMap)
+        } else {
+          reportLocation(report, file, diag.start, diag.length)
+        }
       }
     }
     this.push(report)
@@ -99,13 +115,13 @@ function addDiagnostics(this: Reports, diagnostics: Readonly<Diagnostic[]>): Rep
 }
 
 /** Getter for `Reports.hasErrors` */
-function hasErrors(this: Report[]): boolean {
+function hasErrors(this: Reports): boolean {
   const report = this.find((report) => report.isError)
   return report?.isError || false
 }
 
 /** Getter for `Reports.hasWarnings` */
-function hasWarnings(this: Report[]): boolean {
+function hasWarnings(this: Reports): boolean {
   const report = this.find((report) => report.isWarning)
   return report?.isWarning || false
 }
@@ -128,7 +144,7 @@ function compare(a: Report, b: Report): number {
 }
 
 /** Sort a `Reports` instance in place */
-function sort(this: Report[], comparator?: (a: Report, b: Report) => number): Report[] {
+function sort(this: Reports, comparator?: (a: Report, b: Report) => number): Reports {
   Array.prototype.sort.call(this, comparator || compare)
   return this
 }
@@ -148,11 +164,12 @@ function relativeFileName(path: string): string {
 }
 
 /** Create report location for a generic (non-Vue) associated file */
-function reportLocationForPosition(
+function reportLocation(
+    report: Report,
     file: SourceFile,
     start: number,
     length?: number,
-): Report['location'] | undefined {
+): void {
   const position = getLineAndCharacterOfPosition(file, start)
 
   const lineStart = file.getLineStarts()[position.line]
@@ -167,7 +184,7 @@ function reportLocationForPosition(
   }
 
   // All done!
-  return {
+  report.location = {
     line: position.line + 1,
     column: position.character,
     context: contextLine,
@@ -175,54 +192,46 @@ function reportLocationForPosition(
   }
 }
 
-// /** Create report location mapping it back to the original Vue file */
-// function reportLocationForTranspiledPosition(
-//     file: SourceFile,
-//     transpiled: Transpiled,
-//     start: number,
-//     length?: number,
-// ): Report['location'] | undefined {
-//   const position = getLineAndCharacterOfPosition(file, start)
-//   return undefined
+/** Create report location mapping it back to the original Vue file */
+function reportLocationWithSourceMap(
+    report: Report,
+    file: SourceFile,
+    start: number,
+    length: number | undefined,
+    sourceMapConsumer: SourceMapConsumer,
+): void {
+  const position = getLineAndCharacterOfPosition(file, start)
 
-//   /*
-//   // Make sure we have a source map consumer (lazy init)
-//   if (! transpiled.sourceMapConsumer) {
-//     transpiled.sourceMapConsumer = new SourceMapConsumer(transpiled.sourceMap)
-//   }
+  // Get the original position in the template
+  const originalPosition = sourceMapConsumer.originalPositionFor({
+    line: position.line + 1,
+    column: position.character,
+  })
 
-//   // Get the original position in the template
-//   const originalPosition = transpiled.sourceMapConsumer.originalPositionFor({
-//     line: position.line + 1,
-//     column: position.character,
-//   })
+  // If we don't know the original position, or the original line... pointless
+  if (!(originalPosition && originalPosition.line)) return
 
-//   // If we don't know the original position, or the original line... pointless
-//   if (!(originalPosition && originalPosition.line)) return
+  // We might have a different file name for the report
+  if (originalPosition.name) report.fileName = relativeFileName(originalPosition.name)
 
-//   // Make sure we have some lines (lazy init)
-//   if (! transpiled.templateLines) {
-//     transpiled.templateLines = transpiled.template.split('\n')
-//   }
+  // Get our context line
+  const source = sourceMapConsumer.sourceContentFor(originalPosition.source, false)
+  const { line, column = 0 } = originalPosition
+  const contextLine = source.split('\n')[line - 1] || ''
 
-//   // Get our context line
-//   const { line, column = 0 } = originalPosition
-//   const contextLine = transpiled.templateLines[line - 1]
+  // Use a regenerated position's last column to calculate the length (if any)
+  let contextLength = length || 0
 
-//   // Use a regenerated position's last column to calculate the length (if any)
-//   let contextLength = length || 0
+  // If the end goes beyond one line, cut it to the end of it
+  if ((column + contextLength) > contextLine.length) {
+    contextLength = contextLine.length - column
+  }
 
-//   // If the end goes beyond one line, cut it to the end of it
-//   if ((column + contextLength) > contextLine.length) {
-//     contextLength = contextLine.length - column
-//   }
-
-//   // All done!
-//   return {
-//     line: line,
-//     column: column,
-//     context: contextLine,
-//     contextLength: contextLength,
-//   }
-//   */
-// }
+  // All done!
+  report.location = {
+    line: line,
+    column: column,
+    context: contextLine,
+    contextLength: contextLength,
+  }
+}
