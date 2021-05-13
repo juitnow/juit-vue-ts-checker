@@ -16,3 +16,20 @@ export const K = '\x1B[90m'
 export const W = '\x1B[97m'
 /** ANSI Reset */
 export const X = '\x1B[0m'
+
+/** Wrap a string in red */
+export const r = (string: any): string => `${R}${string}${X}`
+/** Wrap a string in green */
+export const g = (string: any): string => `${G}${string}${X}`
+/** Wrap a string in yellow */
+export const y = (string: any): string => `${Y}${string}${X}`
+/** Wrap a string in blue */
+export const b = (string: any): string => `${B}${string}${X}`
+/** Wrap a string in magenta */
+export const m = (string: any): string => `${M}${string}${X}`
+/** Wrap a string in cyan */
+export const c = (string: any): string => `${C}${string}${X}`
+/** Wrap a string in gray (bright black) */
+export const k = (string: any): string => `${K}${string}${X}`
+/** Wrap a string in white (bright white) */
+export const w = (string: any): string => `${W}${string}${X}`
