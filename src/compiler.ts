@@ -1,6 +1,6 @@
 import { createCache } from './lib/cache'
 import { logger } from './lib/logger'
-import { pseudoPath } from './lib/pseudo'
+import { pseudoPath, pseudoType } from './lib/pseudo'
 
 import {
   CompilerOptions,
@@ -32,6 +32,7 @@ import {
   resolve,
   ResolvedPath,
 } from './lib/files'
+import { SourceMapConsumer } from 'source-map'
 
 /* ========================================================================== *
  * VUE LANGUAGE SERVICE HOST                                                  *
@@ -113,6 +114,26 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
 
   getScriptFileNames(): string[] {
     return Array.from(this._scripts)
+  }
+
+  getSourceMapConsumer(path: string): SourceMapConsumer | undefined {
+    const [ file, type ] = pseudoType(path)
+    if (file && type) {
+      const transpiled = this._transpiledCache.get(file)
+      if (! transpiled) return
+
+      if (type === 'render') {
+        if (! transpiled.renderSourceMapConsumer) {
+          transpiled.renderSourceMapConsumer = new SourceMapConsumer(transpiled.renderSourceMap)
+        }
+        return transpiled.renderSourceMapConsumer
+      } else if (type === 'script') {
+        if (! transpiled.scriptSourceMapConsumer) {
+          transpiled.scriptSourceMapConsumer = new SourceMapConsumer(transpiled.scriptSourceMap)
+        }
+        return transpiled.scriptSourceMapConsumer
+      }
+    }
   }
 
   /* ======================================================================== *
