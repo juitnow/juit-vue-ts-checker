@@ -1,35 +1,91 @@
-import { directoryExists, fileExists, resolve, ResolvedPath } from './files'
+import { Path } from 'typescript'
 import { sep } from 'path'
+
+import {
+  directoryExists,
+  fileLastModified,
+  resolve,
+} from './files'
 
 /* ========================================================================== *
  * PSEUDO FILES OPS FOR VUE SFC                                               *
  * ========================================================================== */
 
-/**
- * A type describing a _pseudo-path_.
- *
- * When `type` is present, `file` will contain the `/dir/file.vue` file name,
- * then `index`, `render` and `script` will contain the indivuidual pseudo
- * paths. Here `type` indicates which path was requested to be resolved.
- *
- * When only `file` is present, this represents an _existing_ file on disk.
- *
- * When `file` is not present, the file did not exist.
- */
-export type PseudoPath = {
-  type?: undefined,
-  file?: undefined,
-} | {
-  type?: undefined,
-  file: ResolvedPath,
-} | {
-  type: 'vue' | 'index' | 'render' | 'script',
-  file: ResolvedPath,
-  index: ResolvedPath,
-  render: ResolvedPath,
-  script: ResolvedPath,
+type PseudoPathType = 'vue' | 'index' | 'render' | 'script'
+
+interface BasePath {
+  path: Path,
+  type?: PseudoPathType | undefined,
+  timestamp?: number | undefined,
 }
 
+interface FileBasePath extends BasePath {
+  type?: undefined
+}
+
+export interface FilePathNotFound extends FileBasePath {
+  path: Path,
+  timestamp?: undefined,
+}
+
+export interface FilePathFound extends FileBasePath {
+  path: Path,
+  timestamp: number,
+}
+
+interface VueBasePath extends BasePath {
+  type: PseudoPathType,
+  vue: Path,
+  index: Path,
+  render: Path,
+  script: Path,
+}
+
+export interface VuePathNotFound extends VueBasePath {
+  timestamp?: undefined,
+}
+
+export interface VuePathFound extends VueBasePath {
+  timestamp: number,
+}
+
+export type PseudoPath = FilePathNotFound | FilePathFound | VuePathNotFound | VuePathFound
+export type PseudoPathFound = FilePathFound | VuePathFound
+export type PseudoPathNotFound = FilePathNotFound | VuePathNotFound
+export type FilePath = FilePathFound | FilePathNotFound
+export type VuePath = VuePathFound | VuePathNotFound
+
+export function isFilePath(path: PseudoPath): path is FilePath {
+  return path.type === undefined
+}
+
+export function isFilePathFound(path: PseudoPath): path is FilePathFound {
+  return (path.type === undefined) && (path.timestamp !== undefined)
+}
+
+export function isFilePathNotFound(path: PseudoPath): path is FilePathNotFound {
+  return (path.type === undefined) && (path.timestamp === undefined)
+}
+
+export function isVuePath(path: PseudoPath): path is VuePath {
+  return path.type !== undefined
+}
+
+export function isVuePathFound(path: PseudoPath): path is VuePathFound {
+  return (path.type !== undefined) && (path.timestamp !== undefined)
+}
+
+export function isVuePathNotFound(path: PseudoPath): path is VuePathNotFound {
+  return (path.type !== undefined) && (path.timestamp === undefined)
+}
+
+export function isPseudoPathFound(path: PseudoPath): path is PseudoPathFound {
+  return path.timestamp !== undefined
+}
+
+export function isPseudoPathNotFound(path: PseudoPath): path is PseudoPathNotFound {
+  return path.timestamp === undefined
+}
 
 /** The extension for the vue files to consider */
 const VUE_EXT = '.vue'
@@ -56,39 +112,45 @@ const VUE_PSEUDO_SCRIPT_EXT = `${VUE_EXT}${VUE_PSEUDO_SCRIPT_SFX}`
 const VUE_PSEUDO_SCRIPT_CUT = VUE_PSEUDO_SCRIPT_SFX.length
 
 /** Resolve a potentially non absolute file name into a `PseudoPath` */
-export function pseudoPath(path: string): PseudoPath {
-  const file = resolve(path)
+export function pseudoPath(file: string): PseudoPath {
+  const path = resolve(file)
 
-  const [ vue, type ] = pseudoType(file)
-  if (vue == undefined) return fileExists(file) ? { file } : { }
+  const pseudo = pseudoType(path)
+  if (pseudo === undefined) {
+    const timestamp = fileLastModified(path)
+    return timestamp === undefined ? { path } : { path, timestamp }
+  }
+
+  const [ vue, type ] = pseudo
 
   // This _could_ be a pseudo-file, or we can have a directory called "dir.vue"
   if (directoryExists(vue)) {
-    return fileExists(file) ? { file } : { }
+    const timestamp = fileLastModified(path)
+    return timestamp === undefined ? { path } : { path, timestamp }
   } else {
-    return fileExists(vue) ? {
-      file: vue,
-      index: vue + VUE_PSEUDO_INDEX_SFX as ResolvedPath,
-      render: vue + VUE_PSEUDO_RENDER_SFX as ResolvedPath,
-      script: vue + VUE_PSEUDO_SCRIPT_SFX as ResolvedPath,
-      type,
-    } : { }
+    const timestamp = fileLastModified(vue)
+    const index = vue + VUE_PSEUDO_INDEX_SFX as Path
+    const render = vue + VUE_PSEUDO_RENDER_SFX as Path
+    const script = vue + VUE_PSEUDO_SCRIPT_SFX as Path
+
+    return { path, type, vue, index, render, script, timestamp }
   }
 }
 
-/** Resolve the _type_ of a potential `PseudoPath` (no checks performed) */
-export function pseudoType(path: string): [ ResolvedPath, 'vue' | 'index' | 'render' | 'script' ] | [] {
-  const file = resolve(path)
-
-  if (file.endsWith(VUE_EXT)) {
-    return [ file, 'vue' ]
-  } else if (file.endsWith(VUE_PSEUDO_INDEX_EXT)) {
-    return [ file.substr(0, file.length - VUE_PSEUDO_INDEX_LEN) as ResolvedPath, 'index' ]
-  } else if (file.endsWith(VUE_PSEUDO_RENDER_EXT)) {
-    return [ file.substr(0, file.length - VUE_PSEUDO_RENDER_LEN) as ResolvedPath, 'render' ]
-  } else if (file.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
-    return [ file.substr(0, file.length - VUE_PSEUDO_SCRIPT_CUT) as ResolvedPath, 'script' ]
-  } else {
-    return []
+/**
+ * Resolve the _type_ of a potential `PseudoPath` (no checks performed)
+ *
+ * Returns a tuple with the resolved `Path` of the original `.vue` followed
+ * by the _type_ identifying the kind of pseudo path.
+ */
+export function pseudoType(path: Path): [ Path, PseudoPathType ] | undefined {
+  if (path.endsWith(VUE_EXT)) {
+    return [ path, 'vue' ]
+  } else if (path.endsWith(VUE_PSEUDO_INDEX_EXT)) {
+    return [ path.substr(0, path.length - VUE_PSEUDO_INDEX_LEN) as Path, 'index' ]
+  } else if (path.endsWith(VUE_PSEUDO_RENDER_EXT)) {
+    return [ path.substr(0, path.length - VUE_PSEUDO_RENDER_LEN) as Path, 'render' ]
+  } else if (path.endsWith(VUE_PSEUDO_SCRIPT_EXT)) {
+    return [ path.substr(0, path.length - VUE_PSEUDO_SCRIPT_CUT) as Path, 'script' ]
   }
 }
