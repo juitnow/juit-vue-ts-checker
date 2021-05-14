@@ -1,10 +1,8 @@
+import { Path } from 'typescript'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
 import assert from 'assert'
-
-/** A type simply marking a `string` as a fully resolved path */
-export type ResolvedPath = string & { __resolvedPath: any }
 
 /* ========================================================================== *
  * CONSTANTS                                                                  *
@@ -33,15 +31,15 @@ export const OS_EOL = os.EOL
  * BASIC FILES OPS                                                            *
  * ========================================================================== */
 
-export function cwd(): ResolvedPath {
-  return process.cwd() as ResolvedPath
+export function cwd(): Path {
+  return process.cwd() as Path
 }
 
-export function resolve(file: string): ResolvedPath {
-  return path.resolve(cwd(), file) as ResolvedPath
+export function resolve(...segments: string[]): Path {
+  return path.resolve(cwd(), ...segments) as Path
 }
 
-export function directoryExists(path: ResolvedPath): boolean {
+export function directoryExists(path: Path): boolean {
   try {
     return fs.statSync(path).isDirectory()
   } catch (error) {
@@ -49,15 +47,7 @@ export function directoryExists(path: ResolvedPath): boolean {
   }
 }
 
-export function fileExists(path: ResolvedPath): boolean {
-  try {
-    return fs.statSync(path).isFile()
-  } catch (error) {
-    return false
-  }
-}
-
-export function fileLastModified(path: ResolvedPath): number | undefined {
+export function fileLastModified(path: Path): number | undefined {
   try {
     return fs.statSync(path).mtimeMs
   } catch (error) {
@@ -65,7 +55,7 @@ export function fileLastModified(path: ResolvedPath): number | undefined {
   }
 }
 
-export function fileRead(path: ResolvedPath, encoding: BufferEncoding = 'utf8'): string | undefined {
+export function fileRead(path: Path, encoding: BufferEncoding = 'utf8'): string | undefined {
   try {
     return fs.readFileSync(path, encoding)
   } catch (error) {
