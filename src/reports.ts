@@ -1,3 +1,7 @@
+import { SourceMapConsumer } from 'source-map'
+import { VueLanguageServiceHost } from './compiler'
+import { pseudoPath } from './lib/pseudo'
+
 import {
   Diagnostic,
   DiagnosticCategory,
@@ -7,10 +11,11 @@ import {
   sys,
 } from 'typescript'
 
-import { pseudoPath } from './lib/pseudo'
-import { cwd, PATH_SEP, resolve } from './lib/files'
-import { VueLanguageServiceHost } from './compiler'
-import { SourceMapConsumer } from 'source-map'
+import {
+  PATH_SEP,
+  cwd,
+  resolve,
+} from './lib/files'
 
 /* ========================================================================== *
  * EXPORTS                                                                    *
@@ -157,7 +162,7 @@ function sort(this: Reports, comparator?: (a: Report, b: Report) => number): Rep
 function relativeFileName(path: string): string {
   const pseudo = pseudoPath(path)
 
-  const file = pseudo.file || resolve(path)
+  const file = pseudo.path || resolve(path)
   const directory = cwd() + PATH_SEP
 
   return file.startsWith(directory) ? file.substr(directory.length) : file
@@ -212,7 +217,7 @@ function reportLocationWithSourceMap(
   if (!(originalPosition && originalPosition.line)) return
 
   // We might have a different file name for the report
-  if (originalPosition.name) report.fileName = relativeFileName(originalPosition.name)
+  if (originalPosition.source) report.fileName = relativeFileName(originalPosition.source)
 
   // Get our context line
   const source = sourceMapConsumer.sourceContentFor(originalPosition.source, false)
