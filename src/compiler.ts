@@ -1,6 +1,19 @@
 import { createCache } from './lib/cache'
+import { k, f } from './lib/colors'
 import { logger } from './lib/logger'
-import { pseudoPath, pseudoType } from './lib/pseudo'
+import { transpile } from './transpile'
+
+import {
+  RawSourceMap,
+  SourceMapConsumer,
+} from 'source-map'
+
+import {
+  isPseudoPathFound,
+  isPseudoPathNotFound,
+  isVuePath,
+  pseudoPath,
+} from './lib/pseudo'
 
 import {
   CompilerOptions,
@@ -8,6 +21,7 @@ import {
   LanguageServiceHost,
   ModuleResolutionCache,
   ModuleResolutionHost,
+  Path,
   ResolvedModule,
   ResolvedProjectReference,
   ScriptSnapshot,
@@ -18,21 +32,13 @@ import {
 } from 'typescript'
 
 import {
-  Transpiled,
-  transpile,
-} from './transpile'
-
-import {
   CASE_SENSITIVE_FS,
   OS_EOL,
   cwd,
-  fileExists,
-  fileLastModified,
-  fileRead,
   resolve,
-  ResolvedPath,
 } from './lib/files'
-import { SourceMapConsumer } from 'source-map'
+
+const log = logger('language host')
 
 /* ========================================================================== *
  * VUE LANGUAGE SERVICE HOST                                                  *
@@ -75,9 +81,15 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
   private readonly _compilationSettings: CompilerOptions
   private readonly _moduleResolutionCache: ModuleResolutionCache
 
-  private readonly _log = logger('language service')
-  private readonly _transpiledCache = createCache<Transpiled>()
-  private readonly _scripts = new Set<string>()
+  /** The contents cache is keyed by the _pseudo_ file */
+  private readonly _cache = createCache<IScriptSnapshot>()
+  /** `RawSourceMap`s cache, based on fully resolved paths */
+  private readonly _rawSourceMaps: Record<string, RawSourceMap> = {}
+  /** `SourceMapConsumer`s cache, based on fully resolved paths (lazyly initialized) */
+  private readonly _sourceMapConsumers: Record<string, SourceMapConsumer> = {}
+
+  /** Our set of root scripts */
+  private readonly _scripts = new Set<Path>()
 
   constructor(options?: CompilerOptions) {
     this._compilationSettings = options || getDefaultCompilerOptions()
@@ -96,19 +108,17 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
    * ROOT SCRIPTS                                                             *
    * ======================================================================== */
 
-  addScriptFileName(path: string): ResolvedPath[] {
-    const pseudo = pseudoPath(path)
+  addScriptFileName(file: string): Path[] {
+    const pseudo = pseudoPath(file)
 
-    if (pseudo.type) {
+    if (isVuePath(pseudo)) {
       this._scripts.add(pseudo.index)
       this._scripts.add(pseudo.render)
       this._scripts.add(pseudo.script)
-      return [ pseudo.index, pseudo.render, pseudo.script ]
-    } else if (pseudo.file) {
-      this._scripts.add(pseudo.file)
-      return [ pseudo.file ]
+      return [ pseudo.render, pseudo.script ]
     } else {
-      return []
+      this._scripts.add(pseudo.path)
+      return [ pseudo.path ]
     }
   }
 
@@ -116,74 +126,101 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
     return Array.from(this._scripts)
   }
 
-  getSourceMapConsumer(path: string): SourceMapConsumer | undefined {
-    const [ file, type ] = pseudoType(path)
-    if (file && type) {
-      const transpiled = this._transpiledCache.get(file)
-      if (! transpiled) return
+  /* ======================================================================== *
+   * SOURCE MAPS AND SOURCE MAP CONSUMERS                                     *
+   * ======================================================================== */
 
-      if (type === 'render') {
-        if (! transpiled.renderSourceMapConsumer) {
-          transpiled.renderSourceMapConsumer = new SourceMapConsumer(transpiled.renderSourceMap)
-        }
-        return transpiled.renderSourceMapConsumer
-      } else if (type === 'script') {
-        if (! transpiled.scriptSourceMapConsumer) {
-          transpiled.scriptSourceMapConsumer = new SourceMapConsumer(transpiled.scriptSourceMap)
-        }
-        return transpiled.scriptSourceMapConsumer
-      }
+  getSourceMapConsumer(file: string): SourceMapConsumer | undefined {
+    const path = resolve(file)
+
+    if (path in this._sourceMapConsumers) return this._sourceMapConsumers[path]
+    if (path in this._rawSourceMaps) {
+      const rawSourceMap = this._rawSourceMaps[path]
+      const sourceMapConsumer = new SourceMapConsumer(rawSourceMap)
+      this._sourceMapConsumers[path] = sourceMapConsumer
+      return sourceMapConsumer
     }
   }
 
   /* ======================================================================== *
-   * SCRIPT VERSION AND SNAPSHOT                                              *
+   * READING AND CACHING OF FILES BASED ON SNAPSHOTS                          *
    * ======================================================================== */
 
-  getScriptVersion(path: string): string {
-    const pseudo = pseudoPath(path)
+  private _readSnapshot(file: string, encoding?: string): IScriptSnapshot | undefined {
+    const [ pseudo, result ] = this._cache(file, (pseudo, contents) => {
+      if (isVuePath(pseudo)) {
+        log.info('Transpiling', f(pseudo.vue), k(`(${contents.length} chas)`))
 
-    const lastModified =
-      pseudo.file ? fileLastModified(pseudo.file) :
-      undefined
+        const transpiled = transpile(pseudo.vue, contents)
 
-    return lastModified?.toString() || 'not-found'
-  }
+        const vueSnapsot = ScriptSnapshot.fromString(contents)
+        const indexSnapshot = ScriptSnapshot.fromString(VUE_SHIM)
+        const renderSnapshot = ScriptSnapshot.fromString(transpiled.render)
+        const scriptSnapshot = ScriptSnapshot.fromString(transpiled.script)
 
-  getScriptSnapshot(path: string): IScriptSnapshot | undefined {
-    const content = this.readFile(path)
-    return content === undefined ? undefined :
-      ScriptSnapshot.fromString(content)
+        this._cache.set(pseudo.vue, vueSnapsot, pseudo.timestamp)
+        this._cache.set(pseudo.index, indexSnapshot, pseudo.timestamp)
+        this._cache.set(pseudo.render, renderSnapshot, pseudo.timestamp)
+        this._cache.set(pseudo.script, scriptSnapshot, pseudo.timestamp)
+
+        this._rawSourceMaps[pseudo.render] = transpiled.renderSourceMap
+        this._rawSourceMaps[pseudo.script] = transpiled.scriptSourceMap
+
+        switch (pseudo.type) {
+          case 'vue': return vueSnapsot
+          case 'index': return indexSnapshot
+          case 'render': return renderSnapshot
+          case 'script': return scriptSnapshot
+        }
+      } else {
+        log.debug('Reading', f(pseudo.path), k(`(${contents.length} chas)`))
+        return ScriptSnapshot.fromString(contents)
+      }
+    }, encoding as BufferEncoding)
+
+    if (result) {
+      return result
+    } else if (isVuePath(pseudo)) {
+      // We don't purge source maps... The last one found is valid even if the
+      // file got deleted between _now_ and when we ask for reports...
+      this._cache.del(pseudo.vue)
+      this._cache.del(pseudo.index)
+      this._cache.del(pseudo.render)
+      this._cache.del(pseudo.script)
+    } else {
+      this._cache.del(pseudo.path)
+    }
   }
 
   /* ======================================================================== *
    * FILE AND DIRECTORY OPERATIONS                                            *
    * ======================================================================== */
 
-  readFile(path: string, encoding?: string): string | undefined {
-    const pseudo = pseudoPath(path)
+  getScriptVersion(file: string): string {
+    const pseudo = pseudoPath(file)
 
-    if (pseudo.type) {
-      const transpiled = this._transpiledCache(pseudo.file, (contents) => {
-        return transpile(pseudo.file, contents)
-      })
-
-      if (transpiled) {
-        switch (pseudo.type) {
-          case 'index': return VUE_SHIM
-          case 'script': return transpiled.script
-          case 'render': return transpiled.render
-        }
-      }
-    } else if (pseudo.file) {
-      return fileRead(pseudo.file, encoding as BufferEncoding)
+    if (isPseudoPathFound(pseudo)) {
+      return pseudo.timestamp.toString()
+    } else {
+      return 'not-found-' + Date.now()
     }
   }
 
-  fileExists(path: string): boolean {
-    const pseudo = pseudoPath(path)
+  getScriptSnapshot(file: string): IScriptSnapshot | undefined {
+    return this._readSnapshot(file)
+  }
 
-    if (pseudo.type) {
+  readFile(file: string, encoding?: string): string | undefined {
+    const snapshot = this._readSnapshot(file, encoding)
+    if (snapshot) return snapshot.getText(0, snapshot.getLength())
+  }
+
+  fileExists(file: string): boolean {
+    const pseudo = pseudoPath(file)
+
+    if (isPseudoPathNotFound(pseudo)) {
+      return false
+    } else if (isVuePath(pseudo)) {
       switch (pseudo.type) {
         case 'vue':
           return false // never show our ".vue" file
@@ -192,10 +229,8 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
         case 'render':
           return true
       }
-    } else if (pseudo.file) {
-      return fileExists(pseudo.file)
     } else {
-      return false
+      return true
     }
   }
 
