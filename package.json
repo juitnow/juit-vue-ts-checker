@@ -1,5 +1,5 @@
 {
-  "name": "@usrz/vue-ts-checker",
+  "name": "@juitnow/vue-ts-checker",
   "version": "1.0.0",
   "description": "Simple TypeScript checker for Vue single file components",
   "main": "index.js",
@@ -11,7 +11,7 @@
     "updates": "check-updates && rm -rf node_modules package-lock.json && npm install",
     "watch": "nodemon -w src -e ts,js -x 'npm run build'"
   },
-  "author": "Pier Fumagalli <pier@usrz.com>",
+  "author": "Pier Fumagalli <pier.fumagalli@juit.com>",
   "license": "MIT",
   "dependencies": {
     "@babel/generator": "^7.14.2",
