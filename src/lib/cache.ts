@@ -1,9 +1,14 @@
 import { Path } from 'typescript'
+
 import {
   fileRead,
   resolve,
 } from './files'
-import { PseudoPath, pseudoPath } from './pseudo'
+
+import {
+  PseudoPath,
+  pseudoPath,
+} from './pseudo'
 
 /** Our (internal) cache callback type */
 type Callback<T> = (path: PseudoPath & { file: Path }, contents: string) => T
@@ -19,7 +24,7 @@ export type Cache<T> = ((
   callback: Callback<T>,
 ) => CacheResult<T> | undefined) & {
   /** Return the content of a cached item */
-  get(path: string): T | undefined
+  get(path: Path): T | undefined
 }
 
 export type CacheResult<T> = {
@@ -79,11 +84,11 @@ export function createCache<T>(keyByPseudoPath: boolean): Cache<T> {
     return { pseudo, result, cached: false }
   }
 
+  function get(path: Path): T | undefined {
+    const file = resolve(path)
+    if (file in _cache) return _cache[file][1]
+  }
+
   // Inject our "get" method on the cache
-  return Object.defineProperty(cache, 'get', {
-    value: (path: string): T | undefined => {
-      const file = resolve(path)
-      if (file in _cache) return _cache[file][1]
-    },
-  })
+  return Object.defineProperty(cache, 'get', { value: get })
 }
