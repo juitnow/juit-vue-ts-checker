@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "npm run compile && npm run lint",
-    "compile": "tsc",
+    "compile": "rm -rf dist/ && tsc",
     "lint": "eslint --ext .js --ext .ts src",
     "test": "echo \"Error: no test specified\" && exit 1",
     "updates": "check-updates && rm -rf node_modules package-lock.json && npm install",
@@ -28,6 +28,7 @@
     "eslint": "^7.26.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-deprecation": "^1.2.1",
-    "typescript": "^4.2.4"
+    "typescript": "^4.2.4",
+    "vue": "^3.0.11"
   }
 }
