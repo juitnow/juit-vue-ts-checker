@@ -1,34 +1,29 @@
-import fs from 'fs'
 import assert from 'assert'
-import { isMainThread, parentPort } from 'worker_threads'
-import { Checker, createChecker } from '../checker'
 import { logger } from '../lib/logger'
-import { Request, Response } from './types'
 
-const log = logger('worker receiver')
+import {
+  Request,
+  Response,
+} from './types'
+
+import {
+  Checker,
+  createChecker,
+} from '../checker'
+
+const log = logger('receiver')
 
 /* Basic sanity check */
-assert(! isMainThread, 'Receiver should not run on main thread')
-assert(parentPort, 'Receiver does not have access to the parent port')
-const parent = parentPort
-
-/* Log message errors */
-parent.on('messageerror', (error) => {
-  log.warn('Message error', error)
-})
-
-/* Log disconnections */
-parent.on('close', () => {
-  log.info('Sender closed')
-})
+assert(process.send, 'Receiver should be spawned as a child process')
+const send = process.send.bind(process)
 
 /* Our checker */
 let checker: Checker | undefined = undefined
 
 /* Main receiver code */
-parent.on('message', (message: Request) => {
+process.on('message', (message: Request) => {
+  const response: Response = { id: message.id, result: undefined, error: false }
   try {
-    const response: Response = { id: message.id, result: undefined, error: false }
     switch (message.type) {
       case 'init':
         if (checker) throw new Error('Checker already initialized')
@@ -41,19 +36,15 @@ parent.on('message', (message: Request) => {
         response.result = [ ...checker.check(...message.files) ]
         break
 
-      case 'flush':
-        fs.fdatasyncSync(process.stdout.fd)
-        fs.fdatasyncSync(process.stderr.fd)
-        break
-
       default:
         throw new Error(`Unsupported request type "${(<any>message).type}"`)
     }
 
-    parent.postMessage(response)
+    send(response)
   } catch (error) {
     log.error('Error handling request', error)
-    const response: Response = { id: message.id, result: undefined, error: true }
-    parent.postMessage(response)
+    response.result = undefined
+    response.error = true
+    send(response)
   }
 })

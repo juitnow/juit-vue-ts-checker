@@ -8,11 +8,7 @@ export interface RequestCheck {
   files: string[]
 }
 
-export interface RequestFlush {
-  type: 'flush'
-}
-
-export type RequestType = RequestInit | RequestCheck | RequestFlush
+export type RequestType = RequestInit | RequestCheck
 
 export type Request = RequestType & {
   id: number

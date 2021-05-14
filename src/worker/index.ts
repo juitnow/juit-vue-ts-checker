@@ -1,4 +1,4 @@
-import { createSender } from './sender'
+import { Sender } from './sender'
 
 import {
   Report,
@@ -9,12 +9,11 @@ import {
 export interface WorkerChecker {
   init: (tsconfig?: string) => Promise<Reports>
   check: (...files: string[]) => Promise<Reports>
-  flush: () => Promise<void>
   destroy: () => Promise<void>
 }
 
 export async function createRemoteChecker(): Promise<WorkerChecker> {
-  const sender = await createSender()
+  const sender = new Sender()
 
   function init(tsconfig?: string): Promise<Reports> {
     return sender.send({ type: 'init', tsconfig })
@@ -26,13 +25,9 @@ export async function createRemoteChecker(): Promise<WorkerChecker> {
         .then((reports: Report[]) => makeReports(reports))
   }
 
-  function flush(): Promise<void> {
-    return sender.send({ type: 'flush' })
-  }
-
   function destroy(): Promise<void> {
     return sender.destroy()
   }
 
-  return { init, check, flush, destroy }
+  return { init, check, destroy }
 }
