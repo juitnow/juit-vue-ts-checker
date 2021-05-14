@@ -6,13 +6,13 @@ import {
   makeReports,
 } from '../reports'
 
-export interface WorkerChecker {
+export interface AsyncChecker {
   init: (tsconfig?: string) => Promise<Reports>
   check: (...files: string[]) => Promise<Reports>
   destroy: () => Promise<void>
 }
 
-export async function createRemoteChecker(): Promise<WorkerChecker> {
+export async function createAsyncChecker(): Promise<AsyncChecker> {
   const sender = new Sender()
 
   function init(tsconfig?: string): Promise<Reports> {
