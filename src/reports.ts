@@ -51,73 +51,21 @@ export interface Report {
 export interface Reports extends Array<Report> {
   readonly hasErrors: boolean
   readonly hasWarnings: boolean
-
-  addDiagnostics(diagnostics: Diagnostic[]): this
 }
 
-interface ReportsInternal extends Reports {
-  readonly _getSourceMapConsumer: (path: string) => SourceMapConsumer | undefined
-}
-
-/** Generate an array of `Report`s from an array of `Diagnostic`s */
-export function makeReports(host: VueLanguageServiceHost, diagnostics?: Diagnostic[]): Reports {
-  const reports: Reports = Object.defineProperties([], {
-    _getSourceMapConsumer: { value: host.getSourceMapConsumer.bind(host) },
-
-    hasErrors: { enumerable: true, get: hasErrors },
-    hasWarnings: { enumerable: true, get: hasWarnings },
-    addDiagnostics: { value: addDiagnostics },
+/** Make a `Reports` out of an array of `Report`s */
+export function makeReports(reports?: Report[]): Reports {
+  const clone = reports ? [ ...reports ] : []
+  return Object.defineProperties(clone, {
+    hasErrors: { get: hasErrors, enumerable: true },
+    hasWarnings: { get: hasWarnings, enumerable: true },
     sort: { value: sort },
   })
-
-  if (diagnostics) reports.addDiagnostics(diagnostics)
-  return reports
 }
 
 /* ========================================================================== *
  * REPORTS PUBLIC METHODS                                                     *
  * ========================================================================== */
-
-/** Add diagnostics to a `Reports` instance */
-function addDiagnostics(this: ReportsInternal, diagnostics: Readonly<Diagnostic[]>): Reports {
-  diagnostics.forEach((diag) => {
-    // The basics...
-    const code = diag.code
-    const message = flattenDiagnosticMessageText(diag.messageText, sys.newLine, 2)
-    const severity =
-      diag.category === DiagnosticCategory.Error ? 'error' :
-      diag.category === DiagnosticCategory.Message ? 'message' :
-      diag.category === DiagnosticCategory.Suggestion ? 'suggestion' :
-      diag.category === DiagnosticCategory.Warning ? 'warning' :
-      'unknown'
-    const isError = diag.category === DiagnosticCategory.Error ? true : undefined
-    const isWarning = diag.category === DiagnosticCategory.Warning ? true : undefined
-
-    // This is our basic report...
-    const report: Report = { code, message, severity, isError, isWarning }
-
-    // If we have a file we can include it...
-    if (diag.file) {
-      const file = diag.file
-
-      // At least we have a name...
-      report.fileName = relativeFileName(file.fileName)
-
-      // If we have a position we can include it as well
-      if (diag.start !== undefined) {
-        const sourceMap = this._getSourceMapConsumer(file.fileName)
-        if (sourceMap) {
-          reportLocationWithSourceMap(report, file, diag.start, diag.length, sourceMap)
-        } else {
-          reportLocation(report, file, diag.start, diag.length)
-        }
-      }
-    }
-    this.push(report)
-  })
-
-  return this
-}
 
 /** Getter for `Reports.hasErrors` */
 function hasErrors(this: Reports): boolean {
@@ -155,8 +103,59 @@ function sort(this: Reports, comparator?: (a: Report, b: Report) => number): Rep
 }
 
 /* ========================================================================== *
- * INTERNALS                                                                  *
+ * CONVERSION DIAGNOSTIC -> REPORT                                            *
  * ========================================================================== */
+
+/** Generate an array of `Report`s from an array of `Diagnostic`s */
+export function diagnosticsReports(
+    host: VueLanguageServiceHost,
+    diagnostics: Readonly<Diagnostic[]> = [],
+): Reports {
+  const reports = diagnostics.map((diagnostic) => diagnosticReport(host, diagnostic))
+  return makeReports(reports)
+}
+
+/** Add diagnostics to a `Reports` instance */
+export function diagnosticReport(
+    host: VueLanguageServiceHost,
+    diagnostic: Diagnostic,
+): Report {
+  // The basics...
+  const code = diagnostic.code
+  const message = flattenDiagnosticMessageText(diagnostic.messageText, sys.newLine, 2)
+  const severity =
+    diagnostic.category === DiagnosticCategory.Error ? 'error' :
+    diagnostic.category === DiagnosticCategory.Message ? 'message' :
+    diagnostic.category === DiagnosticCategory.Suggestion ? 'suggestion' :
+    diagnostic.category === DiagnosticCategory.Warning ? 'warning' :
+    'unknown'
+  const isError = diagnostic.category === DiagnosticCategory.Error ? true : undefined
+  const isWarning = diagnostic.category === DiagnosticCategory.Warning ? true : undefined
+
+  // This is our basic report...
+  const report: Report = { code, message, severity, isError, isWarning }
+
+  // If we have a file we can include it...
+  if (diagnostic.file) {
+    const file = diagnostic.file
+
+    // At least we have a name...
+    report.fileName = relativeFileName(file.fileName)
+
+    // If we have a position we can include it as well
+    if (diagnostic.start !== undefined) {
+      const sourceMap = host.getSourceMapConsumer(file.fileName)
+      if (sourceMap) {
+        reportLocationWithSourceMap(report, file, diagnostic.start, diagnostic.length, sourceMap)
+      } else {
+        reportLocation(report, file, diagnostic.start, diagnostic.length)
+      }
+    }
+  }
+
+  // Done
+  return report
+}
 
 /** Return a relative file name in current working directory */
 function relativeFileName(path: string): string {
