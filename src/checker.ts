@@ -1,61 +1,61 @@
 import { VueLanguageServiceHost } from './compiler'
 import { createCache } from './lib/cache'
+import { cwd } from './lib/files'
+import { k, w } from './lib/colors'
+import { logger } from './lib/logger'
+import { makeReports, Reports } from './reports'
+import { pseudoPath } from './lib/pseudo'
 
 import {
   Diagnostic,
   LanguageService,
+  Path,
   convertCompilerOptionsFromJson,
   createLanguageService,
   readConfigFile,
   sys,
 } from 'typescript'
 
-import {
-  ResolvedPath,
-  cwd,
-  resolve,
-} from './lib/files'
-import { makeReports, Reports } from './reports'
-
-import { logger } from './lib/logger'
-import { k, w } from './lib/colors'
-import { pseudoPath } from './lib/pseudo'
 const log = logger('language service')
 
-
 export class Checker {
-  private readonly cache = createCache<LanguageService>()
-
-  private readonly configFile: ResolvedPath
+  private readonly cache = createCache<LanguageService>(true)
+  private readonly configFile: string
 
   private currentLanguageService?: LanguageService
   private initialDiagnostics!: Diagnostic[]
   private currentHost!: VueLanguageServiceHost
 
-  constructor(path: string) {
-    this.configFile = resolve(path)
+  constructor(configFile: string) {
+    this.configFile = configFile
   }
 
   check(...paths: string[]): Reports {
-    const service = this.cache(this.configFile, () => {
-      log.info('Reloading compiler options from', w(this.configFile))
+    const cached = this.cache(this.configFile, ({ file }) => {
+      if (this.currentLanguageService) {
+        log.debug('Disposing of existing Vue Language Service')
+        this.currentLanguageService.dispose()
+        log.info('Reloading compiler options from', w(file))
+      } else {
+        log.info('Loading compiler options from', w(file))
+      }
 
       // Use TypeScript to read the file, it might have extends/imports/...
-      const contents = readConfigFile(this.configFile, sys.readFile)
+      const contents = readConfigFile(file, sys.readFile)
       const json = contents.config.compilerOptions
       const { options, errors } = convertCompilerOptionsFromJson(json, cwd())
       this.initialDiagnostics = errors
+
+      // Let's create a new language service and remember it. We'll want to
+      // dispose of it if the "tsconfig.json" is changed so that we free memory
       this.currentHost = new VueLanguageServiceHost(options)
-      return createLanguageService(this.currentHost)
+      const service = createLanguageService(this.currentHost)
+      this.currentLanguageService = service
+      return service
     })
 
-    if (! service) throw new Error('Unable to find ' + this.configFile)
-
-    if (this.currentLanguageService && (this.currentLanguageService != service)) {
-      log.debug('Disposing of existing Vue Language Service')
-      this.currentLanguageService.dispose()
-    }
-    this.currentLanguageService = service
+    if (! cached) throw new Error('Unable to find configuration file ' + this.configFile)
+    const { result: service } = cached
 
     const reports = makeReports(this.currentHost, this.initialDiagnostics)
     if (reports.hasErrors) return reports
@@ -63,14 +63,13 @@ export class Checker {
     const files = paths.reduce((files, path) => {
       files.push(...this.currentHost.addScriptFileName(path))
       return files
-    }, [] as ResolvedPath[])
+    }, [] as Path[])
 
     for (const file of files) {
+      const pseudo = pseudoPath(file)
       if (log.isInfoEnabled) {
-        const pseudo = pseudoPath(file)
         if (pseudo.type) {
-          if (pseudo.type === 'render') log.info('Checking', w(pseudo.file), k('(template)'))
-          if (pseudo.type === 'script') log.info('Checking', w(pseudo.file), k('(script)'))
+          log.info('Checking', w(pseudo.file), k(`(${pseudo.type})`))
         } else if (pseudo.file) {
           log.info('Checking', w(pseudo.file))
         }
@@ -78,7 +77,9 @@ export class Checker {
 
       reports.addDiagnostics(service.getSemanticDiagnostics(file))
       reports.addDiagnostics(service.getSyntacticDiagnostics(file))
-      // no suggestions diagnostics... they are too informative in templates :-)
+      if (pseudo.type !== 'render') { // not much we can do here, right?
+        reports.addDiagnostics(service.getSuggestionDiagnostics(file))
+      }
     }
 
     return reports.sort()
