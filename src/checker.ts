@@ -1,7 +1,7 @@
 import { VueLanguageServiceHost } from './compiler'
 import { createCache } from './lib/cache'
+import { colors } from './lib/colors'
 import { cwd } from './lib/files'
-import { k, w } from './lib/colors'
 import { logger } from './lib/logger'
 import { pseudoPath } from './lib/pseudo'
 
@@ -21,6 +21,7 @@ import {
 } from 'typescript'
 
 const log = logger('language service')
+const { f, k } = colors()
 
 export class Checker {
   private readonly _cache = createCache<LanguageService>()
@@ -39,9 +40,9 @@ export class Checker {
       if (this._currentLanguageService) {
         log.debug('Disposing of existing Vue Language Service')
         this._currentLanguageService.dispose()
-        log.info('Reloading compiler options from', w(path))
+        log.info('Reloading compiler options from', f(path))
       } else {
-        log.info('Loading compiler options from', w(path))
+        log.info('Loading compiler options from', f(path))
       }
 
       // Use TypeScript to read the file, it might have extends/imports/...
@@ -73,9 +74,9 @@ export class Checker {
 
       if (log.isInfoEnabled) {
         if (pseudo.type) {
-          log.info('Checking', w(pseudo.vue), k(`(${pseudo.type})`))
+          log.info('Checking', f(pseudo.vue), k(`(${pseudo.type})`))
         } else if (pseudo.path) {
-          log.info('Checking', w(pseudo.path))
+          log.info('Checking', f(pseudo.path))
         }
       }
 

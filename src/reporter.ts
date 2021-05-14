@@ -1,10 +1,10 @@
-import { promises as fs } from 'fs'
-import { Checker } from './checker'
-import { K, R, X, Y, G, C, M, k, r, y, w, c, m } from './lib/colors'
-import { OS_EOL, resolve } from './lib/files'
+import { OS_EOL } from './lib/files'
 import { Reports } from './reports'
+import { colors } from './lib/colors'
 
-function report(reports: Reports): void {
+const { K, R, X, Y, G, C, M, k, r, y, w, m, f } = colors()
+
+export function reporter(reports: Reports): void {
   const write = process.stdout.write.bind(process.stdout)
 
   write(`Generated ${y(reports.length)} reports`)
@@ -39,7 +39,7 @@ function report(reports: Reports): void {
 
     if (report.fileName) {
       write(k(' | at '))
-      write(c(report.fileName))
+      write(f(report.fileName))
       if (report.location) {
         const { line, column, context, contextLength } = report.location
         write(k(' line '))
@@ -57,7 +57,7 @@ function report(reports: Reports): void {
 
             write(k('\n | '))
             write(' '.repeat(column))
-            write(m('~'.repeat(contextLength)))
+            write(m('^'.repeat(contextLength)))
           } else {
             write(context)
           }
@@ -67,40 +67,3 @@ function report(reports: Reports): void {
     }
   }
 }
-
-const checker = new Checker('tsconfig.json')
-let reports = checker.check('src/main.ts')
-
-async function check(path: string, type?: 'file' | 'dir'): Promise<void> {
-  const resolved = resolve(path)
-
-  if (! type) {
-    const stat = await fs.stat(resolved)
-    if (stat.isDirectory()) type = 'dir'
-    else if (stat.isFile()) type = 'file'
-    else return
-  }
-
-  if (type === 'dir') {
-    const entries = await fs.readdir(resolved, { withFileTypes: true })
-    for (const entry of entries) {
-      const name = resolve(resolved, entry.name)
-      if (entry.isDirectory()) await check(name, 'dir')
-      else if (entry.isFile()) await check(name, 'file')
-    }
-  } else if ((type === 'file') && (resolved.match(/\.(ts|vue)$/))) {
-    const fileReports = checker.check(resolved)
-    if (reports) reports.push(...fileReports)
-    else reports = fileReports
-  }
-}
-
-const now = Date.now()
-check('src')
-    .then(() => {
-      if (reports) report(reports)
-      console.log('Full run:', Date.now() - now, 'ms')
-    })
-    .catch((error) => console.log(error))
-
-// report(checker.check('src/components/faq.vue'))

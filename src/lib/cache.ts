@@ -1,5 +1,5 @@
 import { Path } from 'typescript'
-import { f, k } from './colors'
+import { colors } from './colors'
 import { fileRead } from './files'
 import { logger } from './logger'
 
@@ -12,6 +12,7 @@ import {
 } from './pseudo'
 
 const log = logger('cache')
+const { f, k } = colors()
 
 /** Our (internal) cache callback type */
 type Callback<T> = (path: PseudoPathFound, contents: string) => T

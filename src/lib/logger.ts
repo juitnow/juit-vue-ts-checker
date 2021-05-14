@@ -5,7 +5,8 @@
 /* eslint-disable no-console */
 /* eslint-disable no-multi-spaces */
 
-import { R, G, Y, B, C, K, X } from './colors'
+import { colors } from './colors'
+const { R, G, Y, B, C, K, X } = colors()
 
 /* ========================================================================== *
  * INTERNAL TYPES                                                             *

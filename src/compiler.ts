@@ -1,5 +1,5 @@
+import { colors } from './lib/colors'
 import { createCache } from './lib/cache'
-import { k, f } from './lib/colors'
 import { logger } from './lib/logger'
 import { transpile } from './transpile'
 
@@ -39,6 +39,7 @@ import {
 } from './lib/files'
 
 const log = logger('language host')
+const { k, f } = colors()
 
 /* ========================================================================== *
  * VUE LANGUAGE SERVICE HOST                                                  *
