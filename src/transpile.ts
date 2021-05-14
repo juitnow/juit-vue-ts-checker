@@ -1,33 +1,34 @@
-/* ========================================================================== *
- * OUR VUE => TYPESCRIPT CUSTOM TRANSPILER                                    *
- * ========================================================================== */
+import assert from 'assert'
 import crypto from 'crypto'
+import generate from '@babel/generator'
+import { Path } from 'typescript'
+import { parse as parseBabel } from '@babel/parser'
+
+import {
+  RawSourceMap,
+  SourceMapConsumer,
+} from 'source-map'
 
 import {
   compileTemplate,
   parse as parseVueSFC,
 } from '@vue/compiler-sfc'
 
-import generate from '@babel/generator'
-import { parse as babelParse } from '@babel/parser'
-
-import assert from 'assert'
-
 import {
   File,
   assertIdentifier,
   identifier,
+  importDeclaration,
+  importDefaultSpecifier,
+  isExportNamedDeclaration,
   isFunctionDeclaration,
+  stringLiteral,
+  traverseFast,
   tsTypeAnnotation,
   tsTypeParameterInstantiation,
   tsTypeQuery,
   tsTypeReference,
-  traverseFast,
 } from '@babel/types'
-
-import * as t from '@babel/types'
-
-import { SourceMapConsumer, RawSourceMap } from 'source-map'
 
 /* ========================================================================== *
  * EXPORTED TYPES                                                             *
@@ -42,15 +43,11 @@ export interface Transpiled {
   script: string
   /** The source map for the extracted <script> part of the code */
   scriptSourceMap: RawSourceMap
-  /** The (prepared) `SourceMapConsumer` for the extracted <script> */
-  scriptSourceMapConsumer?: SourceMapConsumer
 
   /** The render function generated from <template> */
   render: string
   /** The source map for the render function generated from <template> */
   renderSourceMap: RawSourceMap
-  /** The (prepared) `SourceMapConsumer` for the generated <template> */
-  renderSourceMapConsumer?: SourceMapConsumer
 }
 
 /* ========================================================================== *
@@ -76,7 +73,7 @@ const EMPTY_RENDER = [
  * ========================================================================== */
 
 /** Transpile a `.vue` file into a `Transpiled` instance */
-export function transpile(fileName: string, source: string): Transpiled {
+export function transpile(fileName: Path, source: string): Transpiled {
   // Ask @vue/compiler-sfc to parse the .vue file, splitting it nicely...
   const { descriptor: vue } = parseVueSFC(source, {
     filename: fileName,
@@ -126,13 +123,13 @@ export function transpile(fileName: string, source: string): Transpiled {
   const render = parseAst(template.code, fileName, template.map)
 
   // Let's do some AST trickeries...
-  const _id = t.identifier(`__${id}__`)
+  const _id = identifier(`__${id}__`)
 
   // Walk the body of the program looking for => export function render(...)
   let annotated = false
   for (const node of render.program.body) {
     // Looking for a _named_ export declaration
-    if (! t.isExportNamedDeclaration(node)) continue
+    if (! isExportNamedDeclaration(node)) continue
 
     // Make sure this is _really_ "export function render()"
     const declaration = node.declaration
@@ -162,9 +159,9 @@ export function transpile(fileName: string, source: string): Transpiled {
   assert(annotated, `Unable to annotate render function in ${fileName}`)
 
   // Create => import __id__ from './script'
-  const _importDefault = t.importDefaultSpecifier(_id)
-  const _importSource = t.stringLiteral('./script')
-  const _import = t.importDeclaration([ _importDefault ], _importSource)
+  const _importDefault = importDefaultSpecifier(_id)
+  const _importSource = stringLiteral('./script')
+  const _import = importDeclaration([ _importDefault ], _importSource)
   render.program.body.unshift(_import)
 
   // Now we re-generate the full source back from our AST again...
@@ -192,7 +189,7 @@ export function transpile(fileName: string, source: string): Transpiled {
 // Parse some typescript code into an AST, update all of the AST locations
 // according to the given input source map
 function parseAst(code: string, fileName: string, sourceMap: RawSourceMap): File {
-  const ast = babelParse(code, {
+  const ast = parseBabel(code, {
     plugins: [ 'typescript' ],
     sourceType: 'module',
     sourceFilename: fileName,
