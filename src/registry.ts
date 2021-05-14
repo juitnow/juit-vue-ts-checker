@@ -85,13 +85,13 @@ export class VueDocumentRegistry implements DocumentRegistry {
       settings: CompilerOptions,
   ): DocumentRegistryBucketKey {
     const key = this.reg.getKeyForCompilationSettings(settings)
-    log.trace('Key for compilation settings', key)
+    log.debug('Key for compilation settings', key)
     return key
   }
 
   reportStats(): string {
     const stats = this.reg.reportStats()
-    log.trace('Reporting stats', stats)
+    log.debug('Reporting stats', stats)
     return stats
   }
 

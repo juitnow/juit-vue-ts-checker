@@ -13,12 +13,11 @@ const { R, G, Y, B, C, K, X } = colors()
  * ========================================================================== */
 
 enum Level {
-  trace = 1, // never "falsy"
-  debug = 2,
-  info  = 3,
-  warn  = 4,
-  error = 5,
-  off   = 6,
+  debug = 1, // never "falsy"
+  info  = 2,
+  warn  = 3,
+  error = 4,
+  off   = 5,
 }
 
 /* ========================================================================== *
@@ -32,13 +31,11 @@ export type LogLevel = keyof typeof Level
 export interface Log {
   readonly level: LogLevel
 
-  readonly isTraceEnabled: boolean
   readonly isDebugEnabled: boolean
   readonly isInfoEnabled: boolean
   readonly isWarnEnabled: boolean
   readonly isErrorEnabled: boolean
 
-  trace(...args: any[]): void
   debug(...args: any[]): void
   info (...args: any[]): void
   warn (...args: any[]): void
@@ -59,7 +56,6 @@ export const logger = ((): Logger => {
   let level: Level = Level.info
 
   function getLogLevel(): LogLevel {
-    if (level <= Level.trace) return 'trace'
     if (level <= Level.debug) return 'debug'
     if (level <= Level.info) return 'info'
     if (level <= Level.warn) return 'warn'
@@ -85,13 +81,11 @@ export const logger = ((): Logger => {
     const pfx = prefix ? `${K}[${C}${prefix}${K}]${X}` : ''
 
     const log = prefix ? {
-      trace: (...args: any[]) => void ((level <= Level.trace) && console.trace(date(), `${K}TRACE${X}`, pfx, ...args)),
       debug: (...args: any[]) => void ((level <= Level.debug) && console.debug(date(), `${B}DEBUG${X}`, pfx, ...args)),
       info:  (...args: any[]) => void ((level <= Level.info ) && console.info (date(), `${G}INFO${X} `, pfx, ...args)),
       warn:  (...args: any[]) => void ((level <= Level.warn ) && console.warn (date(), `${Y}WARN${X} `, pfx, ...args)),
       error: (...args: any[]) => void ((level <= Level.error) && console.error(date(), `${R}ERROR${X}`, pfx, ...args)),
     } : {
-      trace: (...args: any[]) => void ((level <= Level.trace) && console.trace(date(), `${B}TRACE${X}`, ...args)),
       debug: (...args: any[]) => void ((level <= Level.debug) && console.debug(date(), `${B}DEBUG${X}`, ...args)),
       info:  (...args: any[]) => void ((level <= Level.info ) && console.info (date(), `${G}INFO${X} `, ...args)),
       warn:  (...args: any[]) => void ((level <= Level.warn ) && console.warn (date(), `${Y}WARN${X} `, ...args)),
@@ -101,7 +95,6 @@ export const logger = ((): Logger => {
     return Object.freeze(Object.assign(log, {
       get level(): LogLevel { return getLogLevel() },
 
-      get isTraceEnabled() { return level <= Level.trace },
       get isDebugEnabled() { return level <= Level.debug },
       get isInfoEnabled()  { return level <= Level.info  },
       get isWarnEnabled()  { return level <= Level.warn  },
