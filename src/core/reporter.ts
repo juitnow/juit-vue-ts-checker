@@ -56,7 +56,7 @@ export function reporter(reports: Reports): void {
             if (skip > 0) write(k(' \u2026\u2026 ')) // hellipsis on shifted col
             write(context.substr(skip, column))
             write(w(context.substr(column + skip, contextLength)))
-            write(context.substr(column + skip, contextLength))
+            write(context.substr(column + skip + contextLength))
 
             write(k('\n | '))
             if (skip > 0) write('    ')
