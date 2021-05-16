@@ -108,17 +108,17 @@ function sort(this: Reports, comparator?: (a: Report, b: Report) => number): Rep
 
 /** Generate an array of `Report`s from an array of `Diagnostic`s */
 export function diagnosticsReports(
-    host: VueLanguageServiceHost,
     diagnostics: Readonly<Diagnostic[]> = [],
+    host?: VueLanguageServiceHost,
 ): Reports {
-  const reports = diagnostics.map((diagnostic) => diagnosticReport(host, diagnostic))
+  const reports = diagnostics.map((diagnostic) => diagnosticReport(diagnostic, host))
   return makeReports(reports)
 }
 
 /** Add diagnostics to a `Reports` instance */
 export function diagnosticReport(
-    host: VueLanguageServiceHost,
     diagnostic: Diagnostic,
+    host?: VueLanguageServiceHost,
 ): Report {
   // The basics...
   const code = diagnostic.code
@@ -144,7 +144,7 @@ export function diagnosticReport(
 
     // If we have a position we can include it as well
     if (diagnostic.start !== undefined) {
-      const sourceMap = host.getSourceMapConsumer(file.fileName)
+      const sourceMap = host?.getSourceMapConsumer(file.fileName)
       if (sourceMap) {
         reportLocationWithSourceMap(report, file, diagnostic.start, diagnostic.length, sourceMap)
       } else {
