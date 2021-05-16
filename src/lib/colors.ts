@@ -48,6 +48,10 @@ export const _f = (string: any): string => `${_F}${string}${_X}`
 
 /* ========================================================================== */
 
+export type ColorsConstructor = ((colorize?: boolean) => Colors) & {
+  colorize: boolean
+}
+
 export type Colors = {
   /** ANSI Red */
   R: string
@@ -94,9 +98,26 @@ export type Colors = {
   f: (string: any) => string
 }
 
+export const colors: ColorsConstructor = createColors as ColorsConstructor
+
+/* ========================================================================== */
+
 const ts = (string: any): string => `${string}`
 
-export function colors(colorize: boolean = process.stdout.isTTY): Colors {
+let _colorize: boolean =
+  process.env.COLORIZE?.toLowerCase() === 'false' ? false :
+  process.env.COLORIZE?.toLowerCase() === 'true' ? true :
+  process.stdout.isTTY
+
+function getColorize(): boolean {
+  return _colorize
+}
+
+function setColorize(colorize: boolean): void {
+  _colorize = colorize
+}
+
+function createColors(colorize: boolean = _colorize): Colors {
   return colorize ? {
     R: _R, G: _G, Y: _Y, B: _B, M: _M, C: _C, K: _K, W: _W, U: _U, F: _F, X: _X,
     r: _r, g: _g, y: _y, b: _b, m: _m, c: _c, k: _k, w: _w, u: _u, f: _f,
@@ -105,3 +126,5 @@ export function colors(colorize: boolean = process.stdout.isTTY): Colors {
     r: ts, g: ts, y: ts, b: ts, m: ts, c: ts, k: ts, w: ts, u: ts, f: ts,
   }
 }
+
+Object.defineProperty(createColors, 'colorize', { get: getColorize, set: setColorize })

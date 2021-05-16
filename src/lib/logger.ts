@@ -52,13 +52,23 @@ export interface Logger {
  * IMPLEMENTATION                                                             *
  * ========================================================================== */
 
+function defaultLogLevel() : Level {
+  switch (process.env.LOG_LEVEL?.toLowerCase()) {
+    case 'debug': return Level.debug
+    case 'info':  return Level.info
+    case 'warn':  return Level.warn
+    case 'error': return Level.error
+    default: return Level.info
+  }
+}
+
 export const logger = ((): Logger => {
-  let level: Level = Level.info
+  let level: Level = defaultLogLevel()
 
   function getLogLevel(): LogLevel {
     if (level <= Level.debug) return 'debug'
-    if (level <= Level.info) return 'info'
-    if (level <= Level.warn) return 'warn'
+    if (level <= Level.info)  return 'info'
+    if (level <= Level.warn)  return 'warn'
     if (level <= Level.error) return 'error'
     return 'off'
   }
