@@ -9,6 +9,8 @@ import {
   Reports,
   makeReports,
   diagnosticsReports,
+  diagnosticReport,
+  Report,
 } from './reports'
 
 import {
@@ -16,9 +18,9 @@ import {
   Path,
   convertCompilerOptionsFromJson,
   createLanguageService,
+  getDefaultCompilerOptions,
   readConfigFile,
   sys,
-  getDefaultCompilerOptions,
 } from 'typescript'
 
 const log = logger('language service')
@@ -73,15 +75,15 @@ abstract class AbstractChecker implements Checker {
 
       // Syntactic reports
       reports.push(...diagnosticsReports(
+          this._languageService.getSyntacticDiagnostics(path),
           this._currentHost,
-          this._languageService.getSyntacticDiagnostics(path)),
-      )
+      ))
 
       // Semantic reports
       reports.push(...diagnosticsReports(
+          this._languageService.getSemanticDiagnostics(path),
           this._currentHost,
-          this._languageService.getSemanticDiagnostics(path)),
-      )
+      ))
 
       // We don't run the _suggestion_ diagnostics...
     }
@@ -115,8 +117,8 @@ class DefaultChecker extends AbstractChecker {
  * ========================================================================== */
 
 type ConfiguredCheckerState = {
-  host: VueLanguageServiceHost,
-  service: LanguageService,
+  host?: VueLanguageServiceHost,
+  service?: LanguageService,
   reports: Reports,
 }
 
@@ -140,15 +142,22 @@ class ConfiguredChecker extends AbstractChecker {
         log.info('Loading compiler options from', f(path))
       }
 
+      const reports = makeReports()
+
       // Use TypeScript to read the file, it might have extends/imports/...
       const contents = readConfigFile(this._tsconfig, sys.readFile)
+      if (contents.error) reports.push(diagnosticReport(contents.error))
+      if (reports.hasErrors) return { reports }
+
+      // Get the JSON of the compiler options and convert it...
       const json = contents.config.compilerOptions
       const { options, errors } = convertCompilerOptionsFromJson(json, cwd())
+      reports.push(...diagnosticsReports(errors))
+      if (reports.hasErrors) return { reports }
 
       // Create our new state
       const host = new VueLanguageServiceHost(options)
       const service = createLanguageService(host)
-      const reports = makeReports(diagnosticsReports(host, errors))
 
       // Remember this instance, to _dispose_ of it on reload
       this._previousLanguageService = service
@@ -157,16 +166,29 @@ class ConfiguredChecker extends AbstractChecker {
       return { host, service, reports }
     })
 
-    if (! state) throw new Error('Unable to read ' + this._tsconfig)
-    return state
+    // We have a state, great (or maybe not, it might have only errors)
+    if (state) return state
+
+    // We couldn't read our file, inject this in the _initial_ reports
+    const report: Report = {
+      code: 5083,
+      message: `Unable to read "${this._tsconfig}"`,
+      severity: 'error',
+      fileName: this._tsconfig,
+    }
+
+    // Only our report...
+    return { reports: makeReports([ report ]) }
   }
 
   protected get _languageService(): LanguageService {
-    return this._state.service
+    if (this._state.service) return this._state.service
+    throw new Error('Language service unavailable')
   }
 
   protected get _currentHost(): VueLanguageServiceHost {
-    return this._state.host
+    if (this._state.host) return this._state.host
+    throw new Error('Language service host unavailable')
   }
 
   init(): Reports {
