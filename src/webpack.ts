@@ -26,10 +26,10 @@ const { K, R, X, C, Y, w, r, g, y, k } = colors()
 logger.level = 'warn'
 
 // For webpack
-const name = 'JuitWebpackCheckerPlugin'
+const name = 'VueTsCheckerPlugin'
 
-/** Options for the construction of our `JuitWebpackCheckerPlugin` */
-export interface JuitWebpackCheckerPluginOptions {
+/** Options for the construction of our `VueTsCheckerPlugin` */
+export interface VueTsCheckerPluginOptions {
   /**
    * The `tsconfig.json` filename to use.
    *
@@ -45,7 +45,7 @@ export interface JuitWebpackCheckerPluginOptions {
 /**
  * Our TypeScript checker and reporter plugin for Webpack 5.x
  */
-export class JuitWebpackCheckerPlugin {
+export class VueTsCheckerPlugin {
   /** Reports encountered compiling, keyed by file name */
   private _state: Record<string, Promise<Reports>> = {}
   /** Whether WebPack is watching or just a single run */
@@ -55,7 +55,7 @@ export class JuitWebpackCheckerPlugin {
   /** A matcher for our extensions */
   private _matcher: RegExp
 
-  constructor(options: JuitWebpackCheckerPluginOptions = {}) {
+  constructor(options: VueTsCheckerPluginOptions = {}) {
     const tsconfig = options.tsconfig
     const extensions = options.extensions || [ 'ts', 'vue' ]
 

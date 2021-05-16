@@ -1,5 +1,5 @@
 {
-  "name": "@juitnow/vue-ts-checker",
+  "name": "@juit/vue-ts-checker",
   "version": "1.0.0",
   "description": "Simple TypeScript checker for Vue single file components",
   "main": "dist/index.js",
