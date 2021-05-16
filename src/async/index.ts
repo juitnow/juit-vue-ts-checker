@@ -1,5 +1,6 @@
 import { Checker } from '../checker'
 import { Sender } from './sender'
+import { Path } from 'typescript'
 
 import {
   Report,
@@ -27,8 +28,12 @@ export function createAsyncChecker(tsconfig?: string): AsyncChecker {
   }
 
   function destroy(): Promise<void> {
-    return sender.destroy()
+    return sender.send({ type: 'destroy' }).then(() => sender.destroy())
   }
 
-  return { init, check, destroy }
+  function dependencies(...files: string[]): Promise<Path[]> {
+    return sender.send({ type: 'dependencies', files })
+  }
+
+  return { init, check, dependencies, destroy }
 }

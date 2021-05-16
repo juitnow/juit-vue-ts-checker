@@ -69,9 +69,25 @@ export class Sender {
   destroy(): Promise<void> {
     if (! this._alive) return Promise.resolve()
 
-    return new Promise((resolve) => {
-      this._child.once('exit', resolve)
-      this._child.kill('SIGTERM')
+    return new Promise((resolve, reject) => {
+      // If we don't hear back in 2 seconds, SIGTERM, in 4 SIGKILL, in 6 error
+      const term = setTimeout(() => this._child.kill('SIGTERM'), 2000)
+      const kill = setTimeout(() => this._child.kill('SIGKILL'), 4000)
+      const done = setTimeout(() => {
+        // Make sure we don't get called again...
+        this._alive = false
+        // All we can do is raise a big error
+        reject(new Error('Receiver process did not exit...'))
+      }, 6000)
+
+      // On exit
+      this._child.once('exit', () => {
+        this._alive = false
+        clearTimeout(term)
+        clearTimeout(kill)
+        clearTimeout(done)
+        resolve()
+      })
     })
   }
 }

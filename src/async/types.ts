@@ -8,7 +8,16 @@ export interface RequestCheck {
   files: string[]
 }
 
-export type RequestType = RequestInit | RequestCheck
+export interface RequestDependencies {
+  type: 'dependencies'
+  files: string[]
+}
+
+export interface RequestDestroy {
+  type: 'destroy'
+}
+
+export type RequestType = RequestInit | RequestCheck | RequestDependencies | RequestDestroy
 
 export type Request = RequestType & {
   id: number
