@@ -88,7 +88,8 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
   private readonly _rawSourceMaps: Record<string, RawSourceMap> = {}
   /** `SourceMapConsumer`s cache, based on fully resolved paths (lazyly initialized) */
   private readonly _sourceMapConsumers: Record<string, SourceMapConsumer> = {}
-
+  /** Our dependencies cache */
+  private readonly _dependencies: Record<string, Set<Path>> = {}
   /** Our set of root scripts */
   private readonly _scripts = new Set<Path>()
 
@@ -109,22 +110,78 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
    * ROOT SCRIPTS                                                             *
    * ======================================================================== */
 
-  addScriptFileName(file: string): Path[] {
-    const pseudo = pseudoPath(file)
+  addScriptFileNames(...files: string[]): Path[] {
+    const paths = new Set<Path>()
 
-    if (isVuePath(pseudo)) {
-      this._scripts.add(pseudo.index)
-      this._scripts.add(pseudo.render)
-      this._scripts.add(pseudo.script)
-      return [ pseudo.render, pseudo.script ]
-    } else {
-      this._scripts.add(pseudo.path)
-      return [ pseudo.path ]
+    for (const file of files) {
+      const pseudo = pseudoPath(file)
+
+      if (isVuePath(pseudo)) {
+        this._scripts.add(pseudo.index)
+        this._scripts.add(pseudo.render)
+        this._scripts.add(pseudo.script)
+        paths.add(pseudo.render)
+        paths.add(pseudo.script)
+      } else {
+        this._scripts.add(pseudo.path)
+        paths.add(pseudo.path)
+      }
     }
+
+    return Array.from(paths)
   }
 
   getScriptFileNames(): string[] {
     return Array.from(this._scripts)
+  }
+
+  getScriptsDependencies(...files: string[]): Path[] {
+    // Recursively process dependencies...
+    const process = (path: Path, dependencies: Set<Path>): void => {
+      const pathDependencies = this._dependencies[path]
+      if (! pathDependencies) return
+      pathDependencies.forEach((dependency) => {
+        if (dependencies.has(dependency)) return
+        dependencies.add(dependency)
+        process(dependency, dependencies)
+      })
+    }
+
+    // Our set of all dependencies for all files
+    const dependencies = new Set<Path>()
+
+    // Process each file individually
+    for (const file of files) {
+      const pseudo = pseudoPath(file)
+      const fileDependencies = new Set<Path>()
+      if (isVuePath(pseudo)) {
+        process(pseudo.index, fileDependencies)
+        process(pseudo.script, fileDependencies)
+        process(pseudo.render, fileDependencies)
+      } else {
+        process(pseudo.path, fileDependencies)
+      }
+
+      // Make sure we re-convert our names from "/dir/file.vue/index.ts" back
+      // to the real file name "/dir/file.vue", only if they exist...
+      Array.from(fileDependencies)
+          // Map back, taking care of directories named "dir.vue"
+          .map((dependency) => {
+            const pseudo = pseudoPath(dependency)
+            if (isVuePath(pseudo)) {
+              return pseudo.vue
+            } else {
+              return pseudo.path
+            }
+          })
+          // Filter the original file (as in ".vue" this appears few times)
+          .filter((path) => path != pseudo.path)
+          // Add to our unique dependencies set
+          .forEach((path) => dependencies.add(path))
+    }
+
+    // Done!
+    return Array.from(dependencies)
   }
 
   /* ======================================================================== *
@@ -246,8 +303,13 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
       redirectedReference: ResolvedProjectReference | undefined,
       options: CompilerOptions,
   ): (ResolvedModule | undefined)[] {
+    const path = resolve(containingFile)
+    const dependencies = this._dependencies[path] || (this._dependencies[path] = new Set<Path>())
+
     return moduleNames.map((moduleName) => {
       const module = resolveModuleName(moduleName, containingFile, options, this, this._moduleResolutionCache, redirectedReference)
+      const dependencyFile = module.resolvedModule?.resolvedFileName
+      if (dependencyFile) dependencies.add(resolve(dependencyFile))
       return module.resolvedModule
     })
   }
