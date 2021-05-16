@@ -47,9 +47,18 @@ export function directoryExists(path: Path): boolean {
   }
 }
 
+export function fileExists(path: Path): boolean | undefined {
+  try {
+    return fs.statSync(path).isFile()
+  } catch (error) {
+    return undefined
+  }
+}
+
 export function fileLastModified(path: Path): number | undefined {
   try {
-    return fs.statSync(path).mtimeMs
+    const stat = fs.statSync(path)
+    if (stat.isFile()) return stat.mtimeMs
   } catch (error) {
     return undefined
   }
