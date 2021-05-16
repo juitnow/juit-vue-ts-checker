@@ -1,3 +1,4 @@
+import { Checker } from '../checker'
 import { Sender } from './sender'
 
 import {
@@ -6,16 +7,16 @@ import {
   makeReports,
 } from '../reports'
 
-export interface AsyncChecker {
-  init: (tsconfig?: string) => Promise<Reports>
-  check: (...files: string[]) => Promise<Reports>
-  destroy: () => Promise<void>
+/** Our `AsyncChecker` is simply a `Checker` returning `Promise`s */
+export type AsyncChecker = {
+  [ Key in keyof Checker ]: (...args: Parameters<Checker[Key]>) => Promise<ReturnType<Checker[Key]>>
 }
 
-export async function createAsyncChecker(): Promise<AsyncChecker> {
+/** Create a new `AsyncChecker` */
+export function createAsyncChecker(tsconfig?: string): AsyncChecker {
   const sender = new Sender()
 
-  function init(tsconfig?: string): Promise<Reports> {
+  function init(): Promise<Reports> {
     return sender.send({ type: 'init', tsconfig })
         .then((reports: Report[]) => makeReports(reports))
   }
