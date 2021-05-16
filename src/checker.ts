@@ -34,6 +34,8 @@ export interface Checker {
   init(): Reports
   /** Check all the files specified and return the `Reports` for them */
   check(...files: string[]): Reports
+  /** Destroy this `Checker` instance */
+  destroy(): void
 }
 
 /** Our abstract `Checker` implementation */
@@ -42,6 +44,10 @@ abstract class AbstractChecker implements Checker {
   protected abstract readonly _languageService: LanguageService
 
   abstract init(): Reports
+
+  destroy(): void {
+    this._languageService.dispose()
+  }
 
   check(...files: string[]): Reports {
     // Start by creating an empty reports instance
