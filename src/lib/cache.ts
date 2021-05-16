@@ -27,7 +27,7 @@ export type Cache<T> = ((
   /** The callback to operate in if we had a cache miss */
   callback: Callback<T>,
   /** The encoding used to read the file (defaults to `utf8`) */
-  enciding?: BufferEncoding,
+  encoding?: BufferEncoding,
 ) => [ PseudoPath, T? ]) & {
   /** Return the content of a cached item */
   get(path: Path): T | undefined
@@ -92,7 +92,6 @@ export function createCache<T>(): Cache<T> {
       delete _cache[_pseudo.path]
       return [ _pseudo ]
     }
-
 
     // Call our callback, and see what it returns
     const result = callback(_pseudo, contents)
