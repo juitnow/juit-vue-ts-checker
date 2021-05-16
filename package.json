@@ -2,7 +2,7 @@
   "name": "@juitnow/vue-ts-checker",
   "version": "1.0.0",
   "description": "Simple TypeScript checker for Vue single file components",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "npm run compile && npm run lint",
     "compile": "rm -rf dist/ && tsc",
