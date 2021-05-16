@@ -25,7 +25,11 @@ export class Sender {
   private _id: number = 0
 
   constructor() {
-    this._child = fork(require.resolve('./receiver'))
+    this._child = fork(require.resolve('./receiver'), { env: {
+      COLORIZE: colors.colorize.toString(),
+      LOG_LEVEL: logger.level,
+    } })
+
     this._alive = true
 
     this._child.on('error', (error) => {
