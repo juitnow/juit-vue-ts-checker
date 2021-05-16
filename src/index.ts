@@ -1,10 +1,10 @@
 export * from './async/index'
 
-export * from './checker'
-export * from './compiler'
-export * from './reporter'
-export * from './reports'
-export * from './transpile'
+export * from './core/checker'
+export * from './core/compiler'
+export * from './core/reporter'
+export * from './core/reports'
+export * from './core/transpile'
 
 export * from './lib/cache'
 export * from './lib/colors'

@@ -1,6 +1,6 @@
-import { colors } from './lib/colors'
-import { createCache } from './lib/cache'
-import { logger } from './lib/logger'
+import { colors } from '../lib/colors'
+import { createCache } from '../lib/cache'
+import { logger } from '../lib/logger'
 import { transpile } from './transpile'
 
 import {
@@ -13,7 +13,7 @@ import {
   isPseudoPathNotFound,
   isVuePath,
   pseudoPath,
-} from './lib/pseudo'
+} from '../lib/pseudo'
 
 import {
   CompilerOptions,
@@ -36,7 +36,7 @@ import {
   OS_EOL,
   cwd,
   resolve,
-} from './lib/files'
+} from '../lib/files'
 
 const log = logger('language host')
 const { k, f } = colors()

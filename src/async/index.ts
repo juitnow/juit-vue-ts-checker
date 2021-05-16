@@ -1,4 +1,4 @@
-import { Checker } from '../checker'
+import { Checker } from '../core/checker'
 import { Sender } from './sender'
 import { Path } from 'typescript'
 
@@ -6,7 +6,7 @@ import {
   Report,
   Reports,
   makeReports,
-} from '../reports'
+} from '../core/reports'
 
 /** Our `AsyncChecker` is simply a `Checker` returning `Promise`s */
 export type AsyncChecker = {

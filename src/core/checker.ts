@@ -1,9 +1,9 @@
 import { VueLanguageServiceHost } from './compiler'
-import { createCache } from './lib/cache'
-import { colors } from './lib/colors'
-import { cwd, fileLastModified, resolve } from './lib/files'
-import { logger } from './lib/logger'
-import { pseudoPath } from './lib/pseudo'
+import { createCache } from '../lib/cache'
+import { colors } from '../lib/colors'
+import { cwd, fileLastModified, resolve } from '../lib/files'
+import { logger } from '../lib/logger'
+import { pseudoPath } from '../lib/pseudo'
 
 import {
   Reports,

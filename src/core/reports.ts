@@ -1,6 +1,6 @@
 import { SourceMapConsumer } from 'source-map'
 import { VueLanguageServiceHost } from './compiler'
-import { pseudoPath } from './lib/pseudo'
+import { pseudoPath } from '../lib/pseudo'
 
 import {
   Diagnostic,
@@ -15,7 +15,7 @@ import {
   PATH_SEP,
   cwd,
   resolve,
-} from './lib/files'
+} from '../lib/files'
 
 /* ========================================================================== *
  * EXPORTS                                                                    *

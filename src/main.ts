@@ -1,11 +1,11 @@
-import { reporter } from './reporter'
-import { createChecker } from './checker'
+import { reporter } from './core/reporter'
+import { createChecker } from './core/checker'
+import { diagnosticsReports } from './core/reports'
 
 import {
   readConfigFile,
   sys,
 } from 'typescript'
-import { diagnosticsReports } from './reports'
 
 /** Read a `tsconfig` file to extract the `include` and `exclude` */
 function readTsConfig(): { exclude: string[], include: string[] } {

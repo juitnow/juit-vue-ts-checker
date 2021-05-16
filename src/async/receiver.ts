@@ -9,7 +9,7 @@ import {
 import {
   Checker,
   createChecker,
-} from '../checker'
+} from '../core/checker'
 
 const log = logger('receiver')
 

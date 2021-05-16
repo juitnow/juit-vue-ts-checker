@@ -1,4 +1,4 @@
-import { logger } from './lib/logger'
+import { logger } from '../lib/logger'
 
 import {
   CompilerOptions,
@@ -15,7 +15,7 @@ import {
   CASE_SENSITIVE_FS,
   cwd,
   resolve,
-} from './lib/files'
+} from '../lib/files'
 
 const log = logger('document registry')
 

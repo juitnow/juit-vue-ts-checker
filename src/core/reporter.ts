@@ -1,6 +1,6 @@
-import { OS_EOL } from './lib/files'
+import { OS_EOL } from '../lib/files'
 import { Reports } from './reports'
-import { colors } from './lib/colors'
+import { colors } from '../lib/colors'
 
 const { K, R, X, Y, G, C, M, k, r, y, w, m, f } = colors()
 
