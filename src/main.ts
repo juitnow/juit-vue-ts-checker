@@ -1,64 +1,49 @@
-/* eslint-disable no-console */
-
-import { promises as fs } from 'fs'
-import { resolve } from './lib/files'
 import { reporter } from './reporter'
-import { Reports } from './reports'
-import { createAsyncChecker } from './async'
+import { createChecker } from './checker'
 
-async function main(): Promise<void> {
-  const promises: Promise<Reports>[] = []
-  const checker = await createAsyncChecker()
-  const reports = await checker.init('tsconfig.json')
+import {
+  formatDiagnosticsWithColorAndContext,
+  readConfigFile,
+  sys,
+} from 'typescript'
 
-  promises.push(checker.check('src/main.ts'))
-  const paths: string[] = []
-
-  async function check(path: string, type?: 'file' | 'dir'): Promise<void> {
-    const resolved = resolve(path)
-
-    if (! type) {
-      const stat = await fs.stat(resolved)
-      if (stat.isDirectory()) type = 'dir'
-      else if (stat.isFile()) type = 'file'
-      else return
+/** Read a `tsconfig` file to extract the `include` and `exclude` */
+function readTsConfig(): { exclude: string[], include: string[] } {
+  if (sys.fileExists('tsconfig.json')) {
+    const config = readConfigFile('tsconfig.json', sys.readFile)
+    if (config.error) {
+      formatDiagnosticsWithColorAndContext([ config.error ], {
+        getCurrentDirectory: sys.getCurrentDirectory,
+        getCanonicalFileName: (file: string) => file,
+        getNewLine: () => sys.newLine,
+      })
+      process.exit(1)
     }
 
-    if (type === 'dir') {
-      const entries = await fs.readdir(resolved, { withFileTypes: true })
-      for (const entry of entries) {
-        const name = resolve(resolved, entry.name)
-        if (entry.isDirectory()) await check(name, 'dir')
-        else if (entry.isFile()) await check(name, 'file')
-      }
-    } else if ((type === 'file') && (resolved.match(/\.(ts|vue)$/))) {
-      // promises.push(checker.check(resolved))
-      paths.push(resolved)
-    }
+    const exclude: string[] = config.config?.exclude || [ 'node_modules' ]
+    const include: string[] = config.config?.include || []
+    return { exclude, include }
   }
 
-  await check('src')
-  await checker.check(...paths)
-  console.log('Done scan:', Date.now() - now, 'ms')
-
-  // await check('src')
-  reports.push(...await checker.check(...paths))
-  console.log('Done scan 2:', Date.now() - now, 'ms')
-
-  // const results = await Promise.all(promises)
-
-  // results.forEach((result) => {
-  //   reports.push(...result)
-  // })
-
-  reporter(reports)
-  await checker.destroy()
+  return { exclude: [ 'node_modules' ], include: [] }
 }
 
+// Mark our time
 const now = Date.now()
 
-main()
-    .then(() => {
-      console.log('Full run:', Date.now() - now, 'ms')
-    })
-    .catch((error) => console.error(error))
+// Read our `tsconfig` to get includes and excludes
+const { exclude, include } = readTsConfig()
+
+// Read the current directory to figure out what to check
+const files = sys.readDirectory(
+    sys.getCurrentDirectory(),
+    [ '.ts', '.vue' ], // extensions, don't forget the "." (dot)
+    exclude,
+    include,
+)
+
+// Check and report!
+reporter(createChecker().check(...files))
+
+// eslint-disable-next-line no-console
+console.log('\nChecked', files.length, 'files in', (Date.now() - now) / 1000, 'sec')
