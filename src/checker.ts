@@ -36,6 +36,8 @@ export interface Checker {
   init(): Reports
   /** Check all the files specified and return the `Reports` for them */
   check(...files: string[]): Reports
+  /** Return a list of dependencies for the given scripts */
+  dependencies(...files: string[]): Path[]
   /** Destroy this `Checker` instance */
   destroy(): void
 }
@@ -56,13 +58,10 @@ abstract class AbstractChecker implements Checker {
     const reports = makeReports()
 
     // Add each file to be checked, and collect the paths
-    const paths = files.reduce((paths, file) => {
-      paths.push(...this._currentHost.addScriptFileName(file))
-      return paths
-    }, [] as Path[])
+    const paths = this._currentHost.addScriptFileNames(...files)
 
-    // Check each path
-    for (const path of paths) {
+    // Check each path (be nice, in order...)
+    for (const path of paths.sort()) {
       // Logging....
       if (log.isInfoEnabled) {
         const pseudo = pseudoPath(path)
@@ -88,7 +87,11 @@ abstract class AbstractChecker implements Checker {
       // We don't run the _suggestion_ diagnostics...
     }
 
-    return reports.sort()
+    return reports
+  }
+
+  dependencies(...files: string[]): Path[] {
+    return this._currentHost.getScriptsDependencies(...files)
   }
 }
 
