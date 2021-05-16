@@ -51,12 +51,16 @@ export function reporter(reports: Reports): void {
         if (context) {
           write(k('\n |\n | '))
           if ((column > 0) && (contextLength > 0)) {
-            write(context.substr(0, column))
-            write(w(context.substr(column, contextLength)))
-            write(context.substr(column + contextLength))
+            const skip = column > 40 ? column - 40 : 0 // shift context if too right
+
+            if (skip > 0) write(k(' \u2026\u2026 ')) // hellipsis on shifted col
+            write(context.substr(skip, column))
+            write(w(context.substr(column + skip, contextLength)))
+            write(context.substr(column + skip, contextLength))
 
             write(k('\n | '))
-            write(' '.repeat(column))
+            if (skip > 0) write('    ')
+            write(' '.repeat(column - skip))
             write(m('^'.repeat(contextLength)))
           } else {
             write(context)
