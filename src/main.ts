@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { reporter } from './core/reporter'
 import { createChecker } from './core/checker'
 import { diagnosticsReports } from './core/reports'
