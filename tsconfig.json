@@ -15,7 +15,7 @@
     "inlineSourceMap": true,
     "strict": true,
     "target": "es2020",
-    "declaration": false,
+    "declaration": true,
     "allowJs": false
   },
   "include": [ "src" ],
