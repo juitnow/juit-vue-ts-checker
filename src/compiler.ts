@@ -150,7 +150,7 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
   private _readSnapshot(file: string, encoding?: string): IScriptSnapshot | undefined {
     const [ pseudo, result ] = this._cache(file, (pseudo, contents) => {
       if (isVuePath(pseudo)) {
-        log.info('Transpiling', f(pseudo.vue), k(`(${contents.length} chas)`))
+        log.info('Transpiling', f(pseudo.vue), k(`(${contents.length} chars)`))
 
         const transpiled = transpile(pseudo.vue, contents)
 
@@ -174,7 +174,7 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
           case 'script': return scriptSnapshot
         }
       } else {
-        log.debug('Reading', f(pseudo.path), k(`(${contents.length} chas)`))
+        log.debug('Reading', f(pseudo.path), k(`(${contents.length} chars)`))
         return ScriptSnapshot.fromString(contents)
       }
     }, encoding as BufferEncoding)
