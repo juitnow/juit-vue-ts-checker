@@ -76,9 +76,10 @@ export class VueDocumentRegistry implements DocumentRegistry {
   releaseDocumentWithKey(
       path: Path,
       key: DocumentRegistryBucketKey,
+      kind?: ScriptKind,
   ): void {
-    log.debug('Releasing document', path, key)
-    return this.reg.releaseDocumentWithKey(path, key)
+    log.debug('Releasing document', path, key, kind)
+    return this.reg.releaseDocumentWithKey(path, key, kind as ScriptKind)
   }
 
   getKeyForCompilationSettings(

@@ -60,7 +60,7 @@ export function makeReports(reports?: Report[]): Reports {
     hasErrors: { get: hasErrors, enumerable: true },
     hasWarnings: { get: hasWarnings, enumerable: true },
     sort: { value: sort },
-  })
+  }) as Reports
 }
 
 /* ========================================================================== *

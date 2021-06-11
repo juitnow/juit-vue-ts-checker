@@ -106,5 +106,5 @@ export function createCache<T>(): Cache<T> {
     get: { value: get },
     set: { value: set },
     del: { value: del },
-  })
+  }) as Cache<T>
 }

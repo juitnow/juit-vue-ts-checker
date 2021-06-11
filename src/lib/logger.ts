@@ -114,5 +114,5 @@ export const logger = ((): Logger => {
 
   return Object.freeze(Object.defineProperties(logger, {
     level: { get: getLogLevel, set: setLogLevel },
-  }))
+  })) as Logger
 })()
