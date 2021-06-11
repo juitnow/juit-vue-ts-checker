@@ -26,7 +26,7 @@ export class Sender {
 
   constructor() {
     this._child = fork(require.resolve('./receiver'), { env: {
-      COLORIZE: colors.colorize.toString(),
+      COLORIZE: colors.colorize ? 'true' : 'false',
       LOG_LEVEL: logger.level,
     } })
 
