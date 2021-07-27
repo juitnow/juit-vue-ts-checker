@@ -19,7 +19,7 @@ export const CASE_SENSITIVE_FS: boolean = ((): boolean => {
   } catch (error) {
     return true
   } finally {
-    fs.rmdirSync(tempDir, { recursive: true })
+    fs.rmSync(tempDir, { recursive: true })
   }
 })()
 
