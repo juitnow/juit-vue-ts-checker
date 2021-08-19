@@ -48,8 +48,8 @@ const { k, f } = colors()
  * the template, we expand any (existing on disk) `/dir/file.vue` file name   *
  * into three pseudo files:                                                   *
  *                                                                            *
- * - `/dir/file.vue/script.ts`  the contents of our <script> tag              *
- * - `/dir/file.vue/render.ts`  the <template> converted to render function   *
+ * - `/dir/file.vue?script.ts`  the contents of our <script> tag              *
+ * - `/dir/file.vue?render.ts`  the <template> converted to render function   *
  * - `/dir/file.vue/index.ts`   the index file binding the two files above    *
  *                                                                            *
  * We use this structure because of a couple of reasons:                      *
@@ -68,15 +68,6 @@ const { k, f } = colors()
  * the two scopes (e.g. if the script declares a variable with the same name  *
  * as an import or variable of the generated template - like "render")        *
  * ========================================================================== */
-
-/** A _shim_ that will be returned for `/dir/file.vue/index.ts` */
-const VUE_SHIM = [
-  'import "./render";',
-  'export * from "./script";',
-  'import _default_ from "./script";',
-  'export default _default_;',
-].join('\n')
-
 
 export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolutionHost {
   private readonly _compilationSettings: CompilerOptions
@@ -120,6 +111,7 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
         this._scripts.add(pseudo.index)
         this._scripts.add(pseudo.render)
         this._scripts.add(pseudo.script)
+        paths.add(pseudo.index)
         paths.add(pseudo.render)
         paths.add(pseudo.script)
       } else {
@@ -209,10 +201,15 @@ export class VueLanguageServiceHost implements LanguageServiceHost, ModuleResolu
       if (isVuePath(pseudo)) {
         log.info('Transpiling', f(pseudo.vue), k(`(${contents.length} chars)`))
 
-        const transpiled = transpile(pseudo.vue, contents)
+        const transpiled = transpile(pseudo, contents)
 
         const vueSnapsot = ScriptSnapshot.fromString(contents)
-        const indexSnapshot = ScriptSnapshot.fromString(VUE_SHIM)
+        const indexSnapshot = ScriptSnapshot.fromString([ // VUE_SHIM
+          `import "${pseudo.render.slice(0, -3)}";`,
+          `export * from "${pseudo.script.slice(0, -3)}";`,
+          `import _default_ from "${pseudo.script.slice(0, -3)}";`,
+          'export default _default_;',
+        ].join('\n'))
         const renderSnapshot = ScriptSnapshot.fromString(transpiled.render)
         const scriptSnapshot = ScriptSnapshot.fromString(transpiled.script)
 
