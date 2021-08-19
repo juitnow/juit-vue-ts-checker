@@ -97,15 +97,15 @@ const VUE_PSEUDO_INDEX_EXT = `${VUE_EXT}${VUE_PSEUDO_INDEX_SFX}`
 /** The number of characters to cut to convert a pseudo index into a file */
 const VUE_PSEUDO_INDEX_LEN = VUE_PSEUDO_INDEX_SFX.length
 
-/** The pseudo-file suffix for the render file, `/render.ts` */
-const VUE_PSEUDO_RENDER_SFX = `${sep}render.ts`
+/** The pseudo-file suffix for the render file, `?render.ts` */
+const VUE_PSEUDO_RENDER_SFX = '?render.ts'
 /** The pseudo-file extension for the render file, `.vue/render.ts` */
 const VUE_PSEUDO_RENDER_EXT = `${VUE_EXT}${VUE_PSEUDO_RENDER_SFX}`
 /** The number of characters to cut to convert a pseudo render into a file */
 const VUE_PSEUDO_RENDER_LEN = VUE_PSEUDO_RENDER_SFX.length
 
-/** The pseudo-file suffix for the script file, `/script.ts` */
-const VUE_PSEUDO_SCRIPT_SFX = `${sep}script.ts`
+/** The pseudo-file suffix for the script file, `?script.ts` */
+const VUE_PSEUDO_SCRIPT_SFX = '?script.ts'
 /** The pseudo-file extension for the script file, `.vue/render.ts` */
 const VUE_PSEUDO_SCRIPT_EXT = `${VUE_EXT}${VUE_PSEUDO_SCRIPT_SFX}`
 /** The number of characters to cut to convert a pseudo script into a file */
