@@ -172,7 +172,7 @@ export function transpile(pseudoPath: VuePathFound, source: string): Transpiled 
     sourceMaps: true,
     filename: fileName,
     sourceFileName: fileName,
-    comments: false,
+    comments: true, // preserve "@ts-ignore" comments!
   }, source)
 
   // We need the source map, our reports would be pointless without
