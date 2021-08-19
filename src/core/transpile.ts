@@ -1,7 +1,6 @@
 import assert from 'assert'
 import crypto from 'crypto'
 import generate from '@babel/generator'
-import { Path } from 'typescript'
 import { parse as parseBabel } from '@babel/parser'
 
 import {
@@ -29,6 +28,8 @@ import {
   tsTypeQuery,
   tsTypeReference,
 } from '@babel/types'
+
+import { VuePathFound } from '../lib/pseudo'
 
 /* ========================================================================== *
  * EXPORTED TYPES                                                             *
@@ -73,7 +74,9 @@ const EMPTY_RENDER = [
  * ========================================================================== */
 
 /** Transpile a `.vue` file into a `Transpiled` instance */
-export function transpile(fileName: Path, source: string): Transpiled {
+export function transpile(pseudoPath: VuePathFound, source: string): Transpiled {
+  const fileName = pseudoPath.vue
+
   // Ask @vue/compiler-sfc to parse the .vue file, splitting it nicely...
   const { descriptor: vue } = parseVueSFC(source, {
     filename: fileName,
@@ -160,7 +163,7 @@ export function transpile(fileName: Path, source: string): Transpiled {
 
   // Create => import __id__ from './script'
   const _importDefault = importDefaultSpecifier(_id)
-  const _importSource = stringLiteral('./script')
+  const _importSource = stringLiteral(pseudoPath.script.slice(0, -3))
   const _import = importDeclaration([ _importDefault ], _importSource)
   render.program.body.unshift(_import)
 
