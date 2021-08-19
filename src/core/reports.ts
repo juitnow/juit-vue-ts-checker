@@ -212,8 +212,19 @@ function reportLocationWithSourceMap(
     column: position.character,
   })
 
-  // If we don't know the original position, or the original line... pointless
-  if (!(originalPosition && originalPosition.line)) return
+  // If we don't know the original position, or the original line contextualize
+  // the report with the compiled file (it'll help _us_ debgging this code)
+  if (!(originalPosition && originalPosition.line)) {
+    const starts = file.getLineStarts()
+    const context = file.getText().substring(starts[position.line], starts[position.line + 1]).trimEnd()
+    report.location = {
+      line: position.line + 1,
+      column: position.character,
+      context: context,
+      contextLength: length || 0,
+    }
+    return
+  }
 
   // We might have a different file name for the report
   if (originalPosition.source) report.fileName = relativeFileName(originalPosition.source)
