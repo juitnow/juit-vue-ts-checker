@@ -30,7 +30,7 @@ Older version are not (and will not be) supported. Time to move on!
 First of all install as a dev dependency:
 
 ```bash
-$ npm install --save-dev '@juit-vue-ts-checker'
+$ npm install --save-dev '@juit/vue-ts-checker'
 ```
 
 Using this plugin should be as easy as a few configuration changes in your
