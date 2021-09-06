@@ -2,24 +2,18 @@ import { Path } from 'typescript'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
-import assert from 'assert'
 
 /* ========================================================================== *
  * CONSTANTS                                                                  *
  * ========================================================================== */
 
 export const CASE_SENSITIVE_FS: boolean = ((): boolean => {
-  const tempPrefix = path.resolve(os.tmpdir(), 'AmICaseSensitive')
-  const tempDir = fs.mkdtempSync(tempPrefix)
   try {
-    assert(fs.statSync(tempDir).isDirectory(), 'Unable to stat normal directory')
-    assert(fs.statSync(tempDir.toUpperCase()).isDirectory(), 'Unable to stat upper cased directory')
-    assert(fs.statSync(tempDir.toLowerCase()).isDirectory(), 'Unable to stat lower cased directory')
+    fs.statSync(__filename.toUpperCase()).isFile()
+    fs.statSync(__filename.toLowerCase()).isFile()
     return false
   } catch (error) {
     return true
-  } finally {
-    fs.rmSync(tempDir, { recursive: true })
   }
 })()
 
