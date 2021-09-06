@@ -86,8 +86,6 @@ export function transpile(pseudoPath: VuePathFound, source: string): Transpiled 
   // Basic checks for what we need
   assert(vue.script, `No script produced for ${fileName}`)
   assert(vue.script.map, `No source map produced for ${fileName}`)
-  assert(vue.template, `No template produced for ${fileName}`)
-  assert(vue.template.map, `No template source map produced for ${fileName}`)
 
   // We really want typescript here, otherwise there's nothing we can do...
   // ... or to be honest, we could send the whole thing back and let TypeScript
@@ -97,6 +95,17 @@ export function transpile(pseudoPath: VuePathFound, source: string): Transpiled 
       transpiled: false,
       script: EMPTY_SCRIPT,
       scriptSourceMap: EMPTY_SOURCE_MAP,
+      render: EMPTY_RENDER,
+      renderSourceMap: EMPTY_SOURCE_MAP,
+    }
+  }
+
+  // The "template" is optional, as the component might have its own `render()`
+  if (! vue.template) {
+    return {
+      transpiled: true,
+      script: vue.script.content,
+      scriptSourceMap: vue.script.map,
       render: EMPTY_RENDER,
       renderSourceMap: EMPTY_SOURCE_MAP,
     }
